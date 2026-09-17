@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { parseVariant, VARIANT_TEACH, inRunTeachOpacity } from "../variant.ts";
+import { Game } from "../Game.ts";
+import { parseVariant, VARIANT_TEACH, EXPERIMENT_TEACH_COPY, inRunTeachOpacity } from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
 import dailyStream from "../__fixtures__/daily-stream-2026-09-17.json";
+import titleHtml from "../../../index.html?raw";
+
+const CONTROL_TEACH = "Steer through the lips. Don’t touch the walls.";
+const LEGACY_GENERIC_HELPER = "Steer with A/D or arrows";
+
+function innerById(html: string, id: string): string {
+  const match = html.match(new RegExp(`id="${id}"[^>]*>([\\s\\S]*?)</p>`));
+  return (match?.[1] ?? "").trim();
+}
 
 describe("parseVariant", () => {
   it("defaults omitted, control, and dead keys to control", () => {
@@ -23,10 +33,28 @@ describe("parseVariant", () => {
   });
 
   it("locks Design teach copy for every live variant", () => {
-    expect(VARIANT_TEACH.control).toBe("Steer through the lips. Don’t touch the walls.");
+    expect(VARIANT_TEACH.control).toBe(CONTROL_TEACH);
+    expect(EXPERIMENT_TEACH_COPY.control).toBe(CONTROL_TEACH);
     expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");
     expect(VARIANT_TEACH.beat).toBe("Thread each lip on the pulse. Works with click off.");
     expect(VARIANT_TEACH.lanes).toBe("Swipe or tap sides to change lane. Stay in the open one.");
+  });
+
+  it("uses Design-locked Control teach on a bare URL and Control chip", () => {
+    expect(innerById(titleHtml, "experiment-teach")).toBe(VARIANT_TEACH.control);
+    expect(innerById(titleHtml, "title-hint")).toBe(VARIANT_TEACH.control);
+    expect(titleHtml).not.toContain(LEGACY_GENERIC_HELPER);
+    expect(titleHtml).toMatch(/id="chip-control"[^>]*\bactive\b|class="chip active"[^>]*id="chip-control"/);
+
+    const game = new Game(null);
+    expect(parseVariant("")).toBe("control");
+    expect(game.variant).toBe("control");
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.control);
+
+    game.setVariant("brake");
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.brake);
+    game.setVariant("control");
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.control);
   });
 
   it("holds in-run teach for 4s then fades", () => {

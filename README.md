@@ -16,9 +16,25 @@ npm install
 npm run dev
 ```
 
-Then open the printed local URL. Keyboard: **A/D** or **←/→** to steer. Pointer: drag left and right. Advance is automatic. After a snag, **Enter** / **R** / **Retry** starts again immediately.
+Then open the printed local URL (`http://localhost:5173/Thread/` — Vite `base` matches GitHub Pages). Keyboard: **A/D** or **←/→** to steer. Pointer: drag left and right. Advance is automatic. After a snag, **Enter** / **R** / **Retry** starts again immediately.
 
-Daily Challenge deep link: `/?daily=YYYY-MM-DD` (that UTC date’s seed).
+Daily Challenge deep link: `/Thread/?daily=YYYY-MM-DD` locally, or `https://ttushka.github.io/Thread/?daily=YYYY-MM-DD` on Pages (that UTC date’s seed).
+
+## GitHub Pages
+
+Playable build: **https://ttushka.github.io/Thread/**
+
+Pushes to `main` (and manual **Actions → pages → Run workflow**) run `npm ci && npm run build` and publish `dist/` with GitHub Actions. Vite `base` is `/Thread/` so JS/CSS/favicon resolve on that project URL, including `?daily=` share links. Production builds set `VITE_PUBLIC_URL=https://ttushka.github.io/Thread` so Daily “Copy challenge” lines point at Pages rather than `localhost`.
+
+### First-time enablement
+
+GitHub often cannot turn this on from the API. Do it once in the UI:
+
+1. Open **https://github.com/ttushka/Thread/settings/pages**
+2. Under **Build and deployment → Source**, choose **GitHub Actions**
+3. Save. Re-run **Actions → pages** (or push to `main`) if the first deploy failed with a Pages permissions / source error.
+
+After that, the `github-pages` environment appears on its own. The site URL is `https://ttushka.github.io/Thread/` (GitHub may redirect `/Thread` → `/Thread/`).
 
 ## Test & build
 

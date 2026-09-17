@@ -48,6 +48,8 @@ export class Game {
   private storage: StorageLike | null;
   private injectedEndless: number | undefined;
   private ended = false;
+  /** Latched until overlayReady so Enter during the death freeze is not dropped. */
+  private restartQueued = false;
 
   constructor(storage: StorageLike | null, opts?: { endlessSeed?: number }) {
     this.storage = storage;
@@ -92,10 +94,12 @@ export class Game {
     this.screen = "title";
     this.world = null;
     this.ended = false;
+    this.restartQueued = false;
   }
 
   private beginRun(): void {
     this.ended = false;
+    this.restartQueued = false;
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
       reducedMotion: Boolean(this.save.settings?.reducedMotion),
@@ -111,19 +115,19 @@ export class Game {
     }
 
     if (this.screen === "play" && this.world) {
-      if (!this.world.alive) {
-        this.finishRun("dead");
-      } else if (this.world.cleared) {
+      if (this.world.cleared) {
         this.finishRun("cleared");
+      } else if (!this.world.alive) {
+        this.finishRun("dead");
       }
     }
 
+    const onResult = this.screen === "dead" || this.screen === "cleared";
+    if (intent.restart && onResult) this.restartQueued = true;
+
     const overlayReady = this.world ? deathPhase(this.world).overlayReady : true;
-    if (
-      overlayReady &&
-      intent.restart &&
-      (this.screen === "dead" || this.screen === "cleared")
-    ) {
+    if (this.restartQueued && overlayReady && onResult) {
+      this.restartQueued = false;
       this.restart();
       return;
     }
@@ -158,6 +162,7 @@ export class Game {
             timeMs,
             seed: this.seed,
             url,
+            cleared: this.screen === "cleared",
           })
         : null;
 

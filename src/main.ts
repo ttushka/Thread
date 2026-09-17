@@ -1,5 +1,5 @@
 import { Game } from "./game/Game.ts";
-import { createInput } from "./game/input.ts";
+import { createInput, isOverlayRetryTarget } from "./game/input.ts";
 import { createLoop } from "./game/loop.ts";
 import { mountCanvas } from "./game/render/canvas.ts";
 import { drawFrame } from "./game/render/draw.ts";
@@ -37,6 +37,22 @@ game.prefersReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").
 const input = createInput({
   canvas,
   getMap: () => view.map,
+  canQueueRestart: () => game.screen === "dead" || game.screen === "cleared",
+});
+
+let overlayRetryArmed = false;
+resultEl.addEventListener("pointerdown", (e) => {
+  overlayRetryArmed = isOverlayRetryTarget(e.target);
+});
+resultEl.addEventListener("pointerup", (e) => {
+  if (!overlayRetryArmed) return;
+  overlayRetryArmed = false;
+  if (!isOverlayRetryTarget(e.target)) return;
+  if (game.screen !== "dead" && game.screen !== "cleared") return;
+  game.restart();
+});
+resultEl.addEventListener("pointercancel", () => {
+  overlayRetryArmed = false;
 });
 
 btnEndless.addEventListener("click", () => game.startEndless());

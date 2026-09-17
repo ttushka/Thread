@@ -3,6 +3,7 @@ import type { Intent } from "../../types.ts";
 import { computeScore } from "../score.ts";
 import {
   BASE_SPEED,
+  CLEAN_PASS_FLASH_MS,
   DEATH_DISSOLVE_MS,
   DEATH_FLASH_MS,
   DEATH_FREEZE_MS,
@@ -113,6 +114,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.time += dt;
   if (world.nickTimer > 0) world.nickTimer = Math.max(0, world.nickTimer - dt);
   if (world.nearMissTimer > 0) world.nearMissTimer = Math.max(0, world.nearMissTimer - dt);
+  fadeParticles(world, dt);
 
   const walls = sampleWalls(world.course.keyframes, world.distance);
   if (world.distance < DIST.openEnd) {
@@ -136,6 +138,8 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
         world.cleanPasses += 1;
         world.combo += 1;
         if (world.combo > world.comboPeak) world.comboPeak = world.combo;
+        // Clean Pass juice only — no Tension cash, no banner.
+        if (obs.kind === "gate") applyCleanPassJuice(world, obs);
       }
     }
   }
@@ -150,7 +154,6 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   }
 
   pushTrail(world);
-  fadeParticles(world, dt);
 }
 
 function applyHit(world: World, hit: "none" | "nick" | "death", obs: ObstacleRuntime | null): void {
@@ -173,6 +176,29 @@ function applyHit(world: World, hit: "none" | "nick" | "death", obs: ObstacleRun
     world.combo = 0;
     world.nickTimer = NICK_MS / 1000;
     world.nearMissTimer = NEAR_MISS_MS / 1000;
+  }
+}
+
+function applyCleanPassJuice(world: World, obs: ObstacleRuntime): void {
+  if (world.reducedMotion) return;
+  world.nearMissTimer = CLEAN_PASS_FLASH_MS / 1000;
+  spawnGatePassParticles(world, obs);
+}
+
+function spawnGatePassParticles(world: World, obs: ObstacleRuntime): void {
+  const cx = (obs.left + obs.right) / 2;
+  const count = 5;
+  for (let i = 0; i < count; i++) {
+    const ang = (Math.PI * 2 * i) / count + 0.4;
+    const sp = 14 + (i % 2) * 8;
+    world.particles.push({
+      x: cx,
+      y: 0,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      life: 0.28,
+      maxLife: 0.28,
+    });
   }
 }
 

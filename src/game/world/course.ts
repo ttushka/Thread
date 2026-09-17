@@ -5,6 +5,7 @@ import {
   CX,
   DIST,
   FIELD_W,
+  GATE_LIP_THICKNESS,
   KEYFRAME_PAD,
   THREAD_RADIUS,
   WALL_MARGIN,
@@ -108,7 +109,7 @@ function placeScoringGate(
       y,
       left,
       right,
-      thickness: 10,
+      thickness: GATE_LIP_THICKNESS,
       baseCenter: center,
       gapWidth: gap,
       amplitude: 0,
@@ -388,6 +389,22 @@ export function streamEvents(course: CourseSpec, count?: number): StreamEvent[] 
 
 function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
+}
+
+export type SlabBar = { x: number; y: number; w: number; h: number };
+
+/** Horizontal lip/bar pair spanning the playfield with a gap — movers and static gates. */
+export function slabPair(
+  y: number,
+  thickness: number,
+  gap: { left: number; right: number },
+): { left: SlabBar; right: SlabBar } {
+  const h = thickness;
+  const top = y - h / 2;
+  return {
+    left: { x: 0, y: top, w: Math.max(0, gap.left), h },
+    right: { x: gap.right, y: top, w: Math.max(0, FIELD_W - gap.right), h },
+  };
 }
 
 export function moverGap(spec: ObstacleSpec, simTime: number): { left: number; right: number } {

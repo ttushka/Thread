@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B0D10" />
+    <meta
+      name="description"
+      content="Thread — a short browser skill game. Easy to pick up. Hard to master cleanly."
+    />
+    <title>Thread</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="Thread playfield"></canvas>
+
+      <div id="hud" class="hud" hidden>
+        <div class="hud-top">
+          <p id="hud-mode" class="hud-kicker">Endless</p>
+          <p id="hud-score" class="hud-score">0</p>
+        </div>
+        <p id="hud-combo" class="hud-combo" hidden>combo 0</p>
+        <p id="hud-best" class="hud-best">best 0</p>
+      </div>
+
+      <div id="title" class="overlay" role="dialog" aria-labelledby="title-heading">
+        <div class="panel">
+          <p class="kicker">Precision skill</p>
+          <h1 id="title-heading">Thread</h1>
+          <p class="lede">
+            Guide a living filament through a narrowing space. Calm control under rising tension.
+          </p>
+          <div class="actions">
+            <button type="button" id="btn-endless" class="btn">Play Endless</button>
+            <p id="title-endless-best" class="meta">Personal best —</p>
+            <button type="button" id="btn-daily" class="btn btn-primary">Daily Challenge</button>
+            <p id="title-daily-meta" class="meta">Resets at 00:00 UTC</p>
+          </div>
+          <p class="hint">
+            Steer with A/D or arrows. Drag left and right on a phone. Advance is automatic.
+          </p>
+          <button type="button" id="btn-motion" class="text-btn">Motion: full</button>
+        </div>
+      </div>
+
+      <div id="result" class="overlay hidden" role="dialog" aria-labelledby="result-heading">
+        <div class="panel">
+          <p id="result-kicker" class="kicker">Run over</p>
+          <h2 id="result-heading">0</h2>
+          <p id="result-sub" class="lede">Distance, clean passes, combo peak.</p>
+          <p id="result-share" class="share-line hidden"></p>
+          <div class="actions row">
+            <button type="button" id="btn-retry" class="btn btn-primary">Retry</button>
+            <button type="button" id="btn-share" class="btn hidden">Copy challenge</button>
+            <button type="button" id="btn-menu" class="btn">Title</button>
+          </div>
+          <p class="hint">Enter or tap to retry. Ready in an instant.</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

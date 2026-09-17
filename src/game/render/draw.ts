@@ -194,19 +194,19 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.shadowColor = THREAD;
-  ctx.shadowBlur = bright ? 18 : 12;
+  ctx.shadowBlur = bright ? 22 : 12;
   ctx.strokeStyle = THREAD_DIM;
-  ctx.lineWidth = 8;
+  ctx.lineWidth = bright ? 9.5 : 8;
   ctx.stroke();
   ctx.strokeStyle = bright ? INK : THREAD;
-  ctx.lineWidth = 3.4;
+  ctx.lineWidth = bright ? 4.2 : 3.4;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   const headSy = THREAD_SCREEN_Y;
   ctx.fillStyle = bright ? INK : THREAD;
   ctx.beginPath();
-  ctx.arc(x, headSy, 3.2, 0, Math.PI * 2);
+  ctx.arc(x, headSy, bright ? 4.2 : 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }

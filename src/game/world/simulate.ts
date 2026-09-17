@@ -196,8 +196,8 @@ function spawnGatePassParticles(world: World, obs: ObstacleRuntime): void {
       y: 0,
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
-      life: 0.2,
-      maxLife: 0.2,
+      life: 0.28,
+      maxLife: 0.28,
     });
   }
 }

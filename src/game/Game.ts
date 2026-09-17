@@ -15,7 +15,7 @@ import { dailyRunSeed } from "./modes/daily.ts";
 import { endlessSeed } from "./modes/endless.ts";
 import { utcDateKey } from "./seed.ts";
 import { formatDailyShare, dailyDeepLink } from "./share.ts";
-import { VARIANT_LABEL, VARIANT_TEACH, type ExperimentVariant } from "./variant.ts";
+import { VARIANT_LABEL, VARIANT_TEACH, inRunTeachOpacity, type ExperimentVariant } from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
 
 export type GameSnapshot = {
@@ -41,6 +41,7 @@ export type GameSnapshot = {
   variant: ExperimentVariant;
   variantLabel: string;
   teach: string;
+  teachOpacity: number;
   braking: boolean;
   beatMuted: boolean;
 };
@@ -208,6 +209,7 @@ export class Game {
       variant: this.variant,
       variantLabel: VARIANT_LABEL[this.variant],
       teach: VARIANT_TEACH[this.variant],
+      teachOpacity: this.screen === "play" && world ? inRunTeachOpacity(world.time) : 0,
       braking: Boolean(world?.braking),
       beatMuted: this.beatMuted,
     };

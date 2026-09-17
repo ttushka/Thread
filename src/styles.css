@@ -112,6 +112,21 @@ body {
   letter-spacing: 0.04em;
 }
 
+.hud-teach {
+  position: absolute;
+  top: max(44px, calc(env(safe-area-inset-top) + 32px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(280px, calc(100% - 32px));
+  margin: 0;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 .hud-slow {
   position: absolute;
   bottom: max(88px, calc(env(safe-area-inset-bottom) + 76px));

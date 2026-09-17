@@ -146,8 +146,13 @@ body {
 .hud-sound {
   position: absolute;
   bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px));
-  left: 16px;
+  left: 8px;
   pointer-events: auto;
+  z-index: 2;
+  min-height: 44px;
+  min-width: 72px;
+  padding: 10px 12px;
+  text-align: left;
 }
 
 .settings {

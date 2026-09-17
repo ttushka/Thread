@@ -112,6 +112,9 @@ btnSound.addEventListener("click", () => {
   audio.setMuted(game.snapshot().muted);
   paintChrome(true);
 });
+btnHudSound.addEventListener("pointerdown", (e) => {
+  e.stopPropagation();
+});
 btnHudSound.addEventListener("click", (e) => {
   e.stopPropagation();
   game.toggleMuted();

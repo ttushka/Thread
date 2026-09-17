@@ -1,6 +1,6 @@
 import type { CourseSpec, ObstacleSpec, Particle } from "../../types.ts";
 import type { Intent } from "../../types.ts";
-import { computeScore } from "../score.ts";
+import { cleanPassAward, computeScore } from "../score.ts";
 import {
   BASE_SPEED,
   CLEAN_PASS_FLASH_MS,
@@ -15,10 +15,13 @@ import {
   NICK_SLOW,
   POINTER_LERP,
   STEER_SPEED,
+  TENSION_CAP,
+  TENSION_GAIN_LOCK_MS,
+  TENSION_HOLD_MS,
   THREAD_RADIUS,
   TRAIL_MAX,
 } from "./constants.ts";
-import { classifyGapHit, hitObstacle } from "./collision.ts";
+import { classifyGapHit, hitObstacle, type Hit } from "./collision.ts";
 import { generateCourse, moverGap, sampleWalls } from "./course.ts";
 
 export type World = {
@@ -35,6 +38,11 @@ export type World = {
   combo: number;
   comboPeak: number;
   cleanPasses: number;
+  cleanAward: number;
+  /** Almost-miss stacks. Cap 3. Cashed on the next Clean Pass. Death clears. Nick does not. */
+  tension: number;
+  tensionTimer: number;
+  tensionGainLock: number;
   time: number;
   trail: { x: number; d: number }[];
   particles: Particle[];
@@ -74,6 +82,10 @@ export function createWorld(
     combo: 0,
     comboPeak: 0,
     cleanPasses: 0,
+    cleanAward: 0,
+    tension: 0,
+    tensionTimer: 0,
+    tensionGainLock: 0,
     time: 0,
     trail: seedTrail(x),
     particles: [],
@@ -83,7 +95,7 @@ export function createWorld(
 }
 
 export function worldScore(world: World): number {
-  return computeScore(world.distance, world.cleanPasses, world.comboPeak);
+  return computeScore(world.distance, world.cleanAward, world.comboPeak);
 }
 
 export function updateWorld(world: World, intent: Intent, dt: number): void {
@@ -114,6 +126,11 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.time += dt;
   if (world.nickTimer > 0) world.nickTimer = Math.max(0, world.nickTimer - dt);
   if (world.nearMissTimer > 0) world.nearMissTimer = Math.max(0, world.nearMissTimer - dt);
+  if (world.tensionGainLock > 0) world.tensionGainLock = Math.max(0, world.tensionGainLock - dt);
+  if (world.tensionTimer > 0) {
+    world.tensionTimer = Math.max(0, world.tensionTimer - dt);
+    if (world.tensionTimer === 0) world.tension = 0;
+  }
   fadeParticles(world, dt);
 
   const walls = sampleWalls(world.course.keyframes, world.distance);
@@ -138,7 +155,10 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
         world.cleanPasses += 1;
         world.combo += 1;
         if (world.combo > world.comboPeak) world.comboPeak = world.combo;
-        // Clean Pass juice only — no Tension cash, no banner.
+        // Tension formula: this pass's clean award = CLEAN_AWARD × (1 + 0.5 × stacks), then stacks clear.
+        world.cleanAward += cleanPassAward(world.tension);
+        world.tension = 0;
+        world.tensionTimer = 0;
         if (obs.kind === "gate") applyCleanPassJuice(world, obs);
       }
     }
@@ -156,14 +176,21 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   pushTrail(world);
 }
 
-function applyHit(world: World, hit: "none" | "nick" | "death", obs: ObstacleRuntime | null): void {
+function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
   if (hit === "none" || !world.alive) return;
   // Opening seconds are structurally wide; still honor true wall deaths.
   if (hit === "death") {
     world.alive = false;
     world.combo = 0;
+    world.tension = 0;
+    world.tensionTimer = 0;
+    world.tensionGainLock = 0;
     world.deathAge = 0;
     if (obs) obs.nicked = true;
+    return;
+  }
+  if (hit === "nearMiss") {
+    pulseNearMiss(world);
     return;
   }
   if (hit === "nick") {
@@ -173,9 +200,34 @@ function applyHit(world: World, hit: "none" | "nick" | "death", obs: ObstacleRun
     } else if (world.nickTimer > 0) {
       return;
     }
-    world.combo = 0;
+    // Combo and Tension survive a nick. Slow-mo stays a timing tool; this obstacle is not Clean.
     world.nickTimer = NICK_MS / 1000;
     world.nearMissTimer = NEAR_MISS_MS / 1000;
+  }
+}
+
+function pulseNearMiss(world: World): void {
+  if (world.tensionGainLock > 0) return;
+  world.tension = Math.min(TENSION_CAP, world.tension + 1);
+  world.tensionTimer = TENSION_HOLD_MS / 1000;
+  world.tensionGainLock = TENSION_GAIN_LOCK_MS / 1000;
+  world.nearMissTimer = NEAR_MISS_MS / 1000;
+  if (!world.reducedMotion) spawnNearMissParticles(world);
+}
+
+function spawnNearMissParticles(world: World): void {
+  const count = 4;
+  for (let i = 0; i < count; i++) {
+    const ang = (Math.PI * 2 * i) / count + 0.15;
+    const sp = 18 + (i % 2) * 10;
+    world.particles.push({
+      x: world.x,
+      y: 0,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      life: 0.22,
+      maxLife: 0.22,
+    });
   }
 }
 

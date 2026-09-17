@@ -113,11 +113,14 @@ describe("pinch readability — lip contact", () => {
     const nickX = gate.left + 6;
     expect(hitObstacle(nickX, gate.y, gate, { left: gate.left, right: gate.right })).toBe("nick");
     const { world } = worldWithGate({ reducedMotion: true, x: nickX, gate });
+    world.combo = 2;
+    world.comboPeak = 2;
     tickUntil(world, nickX, () => world.obstacles[0]!.passed || !world.alive);
     expect(world.alive).toBe(true);
     expect(world.obstacles[0]!.nicked).toBe(true);
     expect(world.cleanPasses).toBe(0);
-    expect(world.combo).toBe(0);
+    expect(world.combo).toBe(2);
+    expect(world.nickTimer).toBeGreaterThan(0);
   });
 });
 
@@ -138,7 +141,7 @@ describe("pinch readability — Clean Pass juice", () => {
     for (const p of world.particles) {
       expect(Math.abs(p.x - gapCenter)).toBeLessThan(0.01);
     }
-    expect(world).not.toHaveProperty("tension");
+    expect(world.tension).toBe(0);
   });
 
   it("skips flash and particles under reduced motion (combo still ticks)", () => {

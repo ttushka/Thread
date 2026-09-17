@@ -32,6 +32,7 @@ describe("Game persistence", () => {
     expect(game.world).not.toBeNull();
     game.world!.distance = 400;
     game.world!.cleanPasses = 2;
+    game.world!.cleanAward = 100;
     game.world!.comboPeak = 2;
     game.world!.alive = false;
     game.tick(idle, TICK);

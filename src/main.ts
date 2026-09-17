@@ -12,6 +12,7 @@ import {
   variantSearchParam,
   type ExperimentVariant,
   VARIANT_KEYS,
+  VARIANT_TEACH,
 } from "./game/variant.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -51,6 +52,7 @@ const view = mountCanvas(canvas);
 const game = new Game(window.localStorage);
 game.prefersReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 game.setVariant(parseVariant(window.location.search));
+experimentTeach.textContent = VARIANT_TEACH[game.variant];
 
 const audio = createAudioBed();
 audio.setMuted(Boolean(game.save.settings?.muted));

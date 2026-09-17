@@ -36,6 +36,9 @@ export const VARIANT_TEACH: Record<ExperimentVariant, string> = {
   lanes: "Swipe or tap sides to change lane. Stay in the open one.",
 };
 
+/** Design binding EXPERIMENT-TEACH-COPY. Default / Control / omitted `?variant=` uses `.control`. */
+export const EXPERIMENT_TEACH_COPY = VARIANT_TEACH;
+
 /** In-run teach: full opacity for 4s, then fade. Once per run. */
 export const TEACH_HOLD_S = 4;
 export const TEACH_FADE_S = 0.5;

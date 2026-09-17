@@ -1,4 +1,4 @@
-import type { Mode, Screen, ThreadSaveV1 } from "../types.ts";
+import type { Mode, Screen, SfxCue, ThreadSaveV1 } from "../types.ts";
 import type { Intent } from "../types.ts";
 import {
   dailyAttemptsFor,
@@ -8,6 +8,7 @@ import {
   recordDailyRun,
   recordEndlessBest,
   type StorageLike,
+  withMuted,
   withReducedMotion,
   writeSave,
 } from "./persistence.ts";
@@ -36,6 +37,7 @@ export type GameSnapshot = {
   overlayReady: boolean;
   today: string;
   archive: boolean;
+  muted: boolean;
 };
 
 export class Game {
@@ -50,6 +52,7 @@ export class Game {
   private ended = false;
   /** Latched until overlayReady so Enter during the death freeze is not dropped. */
   private restartQueued = false;
+  private sfxQueue: SfxCue[] = [];
 
   constructor(storage: StorageLike | null, opts?: { endlessSeed?: number }) {
     this.storage = storage;
@@ -66,6 +69,18 @@ export class Game {
     const next = !this.save.settings?.reducedMotion;
     this.save = withReducedMotion(this.save, next);
     writeSave(this.storage, this.save);
+  }
+
+  toggleMuted(): void {
+    const next = !this.save.settings?.muted;
+    this.save = withMuted(this.save, next);
+    writeSave(this.storage, this.save);
+  }
+
+  drainSfx(): SfxCue[] {
+    const out = this.sfxQueue;
+    this.sfxQueue = [];
+    return out;
   }
 
   startEndless(): void {
@@ -112,6 +127,7 @@ export class Game {
 
     if (this.world && (this.screen === "play" || this.screen === "dead" || this.screen === "cleared")) {
       updateWorld(this.world, this.screen === "play" ? intent : idleIntent(), dt);
+      this.takeSfx();
     }
 
     if (this.screen === "play" && this.world) {
@@ -132,6 +148,12 @@ export class Game {
       return;
     }
     if (intent.toTitle) this.toTitle();
+  }
+
+  private takeSfx(): void {
+    if (!this.world || this.world.sfx.length === 0) return;
+    this.sfxQueue.push(...this.world.sfx);
+    this.world.sfx.length = 0;
   }
 
   private finishRun(kind: "dead" | "cleared"): void {
@@ -185,6 +207,7 @@ export class Game {
       overlayReady: world ? deathPhase(world).overlayReady : true,
       today,
       archive: this.mode === "daily" && this.dateKey !== today,
+      muted: Boolean(this.save.settings?.muted),
     };
   }
 }

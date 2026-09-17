@@ -103,6 +103,20 @@ body {
   left: 16px;
 }
 
+.hud-sound {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  right: 16px;
+  pointer-events: auto;
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  margin-top: 4px;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

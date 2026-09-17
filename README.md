@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Then open the printed local URL (`http://localhost:5173/Thread/` — Vite `base` matches GitHub Pages). Keyboard: **A/D** or **←/→** to steer. Pointer: drag left and right. Advance is automatic. After a snag, **Enter** / **R** / **Retry** starts again immediately.
+Then open the printed local URL (`http://localhost:5173/Thread/` — Vite `base` matches GitHub Pages). Keyboard: **A/D** or **←/→** to steer. Pointer: drag left and right. Advance is automatic. After a snag, **Enter** / **R** / **Retry** starts again immediately. **Sound** (title + HUD) mutes the bed; the choice is stored in `thread.v1`.
 
 Daily Challenge deep link: `/Thread/?daily=YYYY-MM-DD` locally, or `https://ttushka.github.io/Thread/?daily=YYYY-MM-DD` on Pages (that UTC date’s seed).
 

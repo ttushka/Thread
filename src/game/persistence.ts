@@ -56,6 +56,7 @@ export function loadSave(storage: StorageLike | null | undefined): ThreadSaveV1 
     if (settingsRaw) {
       save.settings = {
         reducedMotion: Boolean(settingsRaw.reducedMotion),
+        muted: Boolean(settingsRaw.muted),
       };
     }
     return save;
@@ -126,6 +127,13 @@ export function withReducedMotion(save: ThreadSaveV1, reducedMotion: boolean): T
   return {
     ...save,
     settings: { ...save.settings, reducedMotion },
+  };
+}
+
+export function withMuted(save: ThreadSaveV1, muted: boolean): ThreadSaveV1 {
+  return {
+    ...save,
+    settings: { ...save.settings, muted },
   };
 }
 

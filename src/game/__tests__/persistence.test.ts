@@ -7,6 +7,8 @@ import {
   noteDailyAttempt,
   recordDailyRun,
   recordEndlessBest,
+  withMuted,
+  withReducedMotion,
   writeSave,
   type StorageLike,
 } from "../persistence.ts";
@@ -76,5 +78,20 @@ describe("thread.v1 persistence", () => {
     save = recordDailyRun(save, "2026-09-10", 5000, "2026-09-17");
     expect(save.daily.dateKey).toBe("");
     expect(save.daily.best).toBe(0);
+  });
+
+  it("persists muted without dropping reduced motion", () => {
+    const s = new MemoryStorage();
+    let save = loadSave(s);
+    save = withReducedMotion(save, true);
+    save = withMuted(save, true);
+    writeSave(s, save);
+    const round = loadSave(s);
+    expect(round.settings?.reducedMotion).toBe(true);
+    expect(round.settings?.muted).toBe(true);
+    save = withMuted(round, false);
+    writeSave(s, save);
+    expect(loadSave(s).settings?.muted).toBe(false);
+    expect(loadSave(s).settings?.reducedMotion).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import type { CourseSpec, ObstacleSpec, Particle } from "../../types.ts";
+import type { CourseSpec, ObstacleSpec, Particle, SfxCue } from "../../types.ts";
 import type { Intent } from "../../types.ts";
 import { cleanPassAward, computeScore } from "../score.ts";
 import {
@@ -48,7 +48,13 @@ export type World = {
   particles: Particle[];
   reducedMotion: boolean;
   obstacles: ObstacleRuntime[];
+  /** One-shots queued this tick. Drained by Game; never blocks play. */
+  sfx: SfxCue[];
 };
+
+function cue(world: World, id: SfxCue): void {
+  world.sfx.push(id);
+}
 
 type ObstacleRuntime = ObstacleSpec & {
   passed: boolean;
@@ -91,6 +97,7 @@ export function createWorld(
     particles: [],
     reducedMotion: opts.reducedMotion,
     obstacles: course.obstacles.map((o) => ({ ...o, passed: false, nicked: false })),
+    sfx: [],
   };
 }
 
@@ -159,6 +166,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
         world.cleanAward += cleanPassAward(world.tension);
         world.tension = 0;
         world.tensionTimer = 0;
+        cue(world, "clean");
         if (obs.kind === "gate") applyCleanPassJuice(world, obs);
       }
     }
@@ -170,6 +178,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
     world.cleared = true;
     world.alive = false;
     world.distance = world.course.finishY;
+    cue(world, "clear");
     spawnClearParticles(world);
   }
 
@@ -187,6 +196,7 @@ function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
     world.tensionGainLock = 0;
     world.deathAge = 0;
     if (obs) obs.nicked = true;
+    cue(world, "death");
     return;
   }
   if (hit === "nearMiss") {
@@ -201,8 +211,10 @@ function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
       return;
     }
     // Combo and Tension survive a nick. Slow-mo stays a timing tool; this obstacle is not Clean.
+    const fresh = world.nickTimer <= 0;
     world.nickTimer = NICK_MS / 1000;
     world.nearMissTimer = NEAR_MISS_MS / 1000;
+    if (fresh) cue(world, "nick");
   }
 }
 
@@ -212,6 +224,7 @@ function pulseNearMiss(world: World): void {
   world.tensionTimer = TENSION_HOLD_MS / 1000;
   world.tensionGainLock = TENSION_GAIN_LOCK_MS / 1000;
   world.nearMissTimer = NEAR_MISS_MS / 1000;
+  cue(world, "tension");
   if (!world.reducedMotion) spawnNearMissParticles(world);
 }
 

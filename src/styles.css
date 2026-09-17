@@ -137,7 +137,11 @@ h2 {
   margin: 0 0 22px;
   color: var(--ink-muted);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+#result .lede {
+  font-size: 13px;
 }
 
 .actions {
@@ -201,8 +205,9 @@ h2 {
 
 .share-line {
   margin: -8px 0 16px;
-  line-height: 1.4;
-  word-break: break-word;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  font-size: 11px;
 }
 
 .hint {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Game } from "../Game.ts";
 import { SAVE_KEY, type StorageLike } from "../persistence.ts";
 import { TICK } from "../world/constants.ts";
+import { createWorld, deathPhase } from "../world/simulate.ts";
 import type { Intent } from "../../types.ts";
 
 class MemoryStorage implements StorageLike {
@@ -47,12 +48,19 @@ describe("Game persistence", () => {
     const seed = game.seed;
     game.world!.alive = false;
     game.tick({ ...idle, restart: true }, TICK);
-    // overlay not ready yet — still same run
     expect(game.seed).toBe(seed);
     if (game.world) game.world.deathAge = 0.25;
     game.tick({ ...idle, restart: true }, TICK);
     expect(game.mode).toBe("daily");
     expect(game.seed).toBe(seed);
     expect(game.screen).toBe("play");
+  });
+});
+
+describe("death juice", () => {
+  it("does not apply the fail flash while the thread is alive", () => {
+    const world = createWorld(1, { daily: true, reducedMotion: false });
+    expect(world.alive).toBe(true);
+    expect(deathPhase(world).flash).toBe(0);
   });
 });

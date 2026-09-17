@@ -52,7 +52,7 @@ export function drawFrame(
     drawThread(ctx, world, camera, x);
     drawParticles(ctx, world);
     const phase = deathPhase(world);
-    if (phase.flash > 0 && !world.cleared) {
+    if (!world.alive && !world.cleared && phase.flash > 0) {
       ctx.fillStyle = rgba(DANGER, 0.22 * phase.flash);
       ctx.fillRect(0, 0, FIELD_W, FIELD_H);
     }
@@ -107,7 +107,7 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
   ctx.fill();
 
   ctx.strokeStyle = OBSTACLE_EDGE;
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   left.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
   ctx.stroke();
@@ -176,12 +176,15 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  ctx.shadowColor = THREAD;
+  ctx.shadowBlur = bright ? 18 : 12;
   ctx.strokeStyle = THREAD_DIM;
-  ctx.lineWidth = 7;
+  ctx.lineWidth = 8;
   ctx.stroke();
   ctx.strokeStyle = bright ? INK : THREAD;
-  ctx.lineWidth = 2.6;
+  ctx.lineWidth = 3.4;
   ctx.stroke();
+  ctx.shadowBlur = 0;
 
   const headSy = THREAD_SCREEN_Y;
   ctx.fillStyle = bright ? INK : THREAD;

@@ -219,6 +219,12 @@ export function deathPhase(world: World): {
   dissolve: number;
   overlayReady: boolean;
 } {
+  if (world.alive) {
+    return { flash: 0, dissolve: 0, overlayReady: false };
+  }
+  if (world.cleared) {
+    return { flash: 0, dissolve: 0, overlayReady: true };
+  }
   const ms = world.deathAge * 1000;
   const flash = world.reducedMotion
     ? 0
@@ -231,7 +237,7 @@ export function deathPhase(world: World): {
   return {
     flash,
     dissolve,
-    overlayReady: ms >= DEATH_FREEZE_MS || world.cleared,
+    overlayReady: ms >= DEATH_FREEZE_MS,
   };
 }
 

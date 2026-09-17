@@ -86,6 +86,7 @@ export function createInput(opts: InputOptions): {
   const pointerDown = (e: PointerEvent) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
     if (pointerId !== null) return;
+    if (e.target instanceof Element && e.target.closest("button")) return;
     opts.canvas.setPointerCapture(e.pointerId);
     pointerId = e.pointerId;
     pointerActive = true;

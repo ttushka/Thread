@@ -30,11 +30,22 @@ export const VARIANT_LABEL: Record<ExperimentVariant, string> = {
 };
 
 export const VARIANT_TEACH: Record<ExperimentVariant, string> = {
-  control: "Steer with A/D or arrows. Drag left and right on a phone. Advance is automatic.",
-  brake: "Hold to slow. Steer the gaps.",
-  beat: "Thread the lips on the beat.",
-  lanes: "Stay in open lanes. Swipe to move.",
+  control: "Steer through the lips. Don’t touch the walls.",
+  brake: "Hold Brake (or Space) to slow. Steer the gaps.",
+  beat: "Thread each lip on the pulse. Works with click off.",
+  lanes: "Swipe or tap sides to change lane. Stay in the open one.",
 };
+
+/** In-run teach: full opacity for 4s, then fade. Once per run. */
+export const TEACH_HOLD_S = 4;
+export const TEACH_FADE_S = 0.5;
+
+export function inRunTeachOpacity(timeS: number): number {
+  if (timeS <= TEACH_HOLD_S) return 1;
+  const t = (timeS - TEACH_HOLD_S) / TEACH_FADE_S;
+  if (t >= 1) return 0;
+  return 1 - t;
+}
 
 export function isExperimentVariant(value: string | null | undefined): value is ExperimentVariant {
   return value === "control" || value === "brake" || value === "beat" || value === "lanes";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVariant, VARIANT_TEACH } from "../variant.ts";
+import { parseVariant, VARIANT_TEACH, inRunTeachOpacity } from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
 import dailyStream from "../__fixtures__/daily-stream-2026-09-17.json";
@@ -22,10 +22,19 @@ describe("parseVariant", () => {
     expect(parseVariant("?daily=2026-09-17&variant=beat")).toBe("beat");
   });
 
-  it("has a teach line for every live variant", () => {
-    expect(VARIANT_TEACH.brake).toMatch(/slow/i);
-    expect(VARIANT_TEACH.beat).toMatch(/beat/i);
-    expect(VARIANT_TEACH.lanes).toMatch(/lanes/i);
+  it("locks Design teach copy for every live variant", () => {
+    expect(VARIANT_TEACH.control).toBe("Steer through the lips. Don’t touch the walls.");
+    expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");
+    expect(VARIANT_TEACH.beat).toBe("Thread each lip on the pulse. Works with click off.");
+    expect(VARIANT_TEACH.lanes).toBe("Swipe or tap sides to change lane. Stay in the open one.");
+  });
+
+  it("holds in-run teach for 4s then fades", () => {
+    expect(inRunTeachOpacity(0)).toBe(1);
+    expect(inRunTeachOpacity(4)).toBe(1);
+    expect(inRunTeachOpacity(4.25)).toBeCloseTo(0.5, 5);
+    expect(inRunTeachOpacity(4.5)).toBe(0);
+    expect(inRunTeachOpacity(8)).toBe(0);
   });
 });
 

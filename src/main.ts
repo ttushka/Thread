@@ -25,6 +25,7 @@ const hudScore = must("#hud-score");
 const hudCombo = must("#hud-combo");
 const hudBest = must("#hud-best");
 const hudVariant = must("#hud-variant");
+const hudTeach = must("#hud-teach");
 const hudSlow = must("#hud-slow");
 const titleEndlessBest = must("#title-endless-best");
 const titleDailyMeta = must("#title-daily-meta");
@@ -167,6 +168,15 @@ function paintChrome(force = false): void {
   titleVariantBadge.textContent = snap.variantLabel;
   hudVariant.hidden = onTitle || !showBadge;
   hudVariant.textContent = snap.variantLabel;
+
+  const showTeach = !onTitle && !onResult && snap.teachOpacity > 0.01;
+  hudTeach.hidden = !showTeach;
+  if (showTeach) {
+    hudTeach.textContent = snap.teach;
+    hudTeach.style.opacity = String(snap.teachOpacity);
+  } else {
+    hudTeach.style.opacity = "0";
+  }
 
   for (const key of VARIANT_KEYS) {
     const chip = document.querySelector<HTMLButtonElement>(`[data-variant="${key}"]`);

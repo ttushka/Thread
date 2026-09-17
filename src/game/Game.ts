@@ -16,6 +16,7 @@ import { dailyRunSeed } from "./modes/daily.ts";
 import { endlessSeed } from "./modes/endless.ts";
 import { utcDateKey } from "./seed.ts";
 import { formatDailyShare, dailyDeepLink } from "./share.ts";
+import { VARIANT_LABEL, VARIANT_TEACH, type ExperimentVariant } from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
 
 export type GameSnapshot = {
@@ -27,6 +28,7 @@ export type GameSnapshot = {
   combo: number;
   comboPeak: number;
   cleanPasses: number;
+  perfects: number;
   distance: number;
   timeMs: number;
   endlessBest: number;
@@ -38,6 +40,11 @@ export type GameSnapshot = {
   today: string;
   archive: boolean;
   muted: boolean;
+  variant: ExperimentVariant;
+  variantLabel: string;
+  teach: string;
+  braking: boolean;
+  beatMuted: boolean;
 };
 
 export class Game {
@@ -47,6 +54,8 @@ export class Game {
   seed = 1;
   world: World | null = null;
   save: ThreadSaveV1;
+  variant: ExperimentVariant = "control";
+  beatMuted = false;
   private storage: StorageLike | null;
   private injectedEndless: number | undefined;
   private ended = false;
@@ -54,10 +63,19 @@ export class Game {
   private restartQueued = false;
   private sfxQueue: SfxCue[] = [];
 
-  constructor(storage: StorageLike | null, opts?: { endlessSeed?: number }) {
+  constructor(storage: StorageLike | null, opts?: { endlessSeed?: number; variant?: ExperimentVariant }) {
     this.storage = storage;
     this.save = loadSave(storage);
     this.injectedEndless = opts?.endlessSeed;
+    if (opts?.variant) this.variant = opts.variant;
+  }
+
+  setVariant(variant: ExperimentVariant): void {
+    this.variant = variant;
+  }
+
+  toggleBeatMute(): void {
+    this.beatMuted = !this.beatMuted;
   }
 
   prefersReducedMotion(cssPrefers: boolean): void {
@@ -118,6 +136,7 @@ export class Game {
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
       reducedMotion: Boolean(this.save.settings?.reducedMotion),
+      variant: this.variant,
     });
     this.screen = "play";
   }
@@ -197,6 +216,7 @@ export class Game {
       combo: world?.combo ?? 0,
       comboPeak: world?.comboPeak ?? 0,
       cleanPasses: world?.cleanPasses ?? 0,
+      perfects: world?.perfects ?? 0,
       distance: world?.distance ?? 0,
       timeMs,
       endlessBest: this.save.endlessBest,
@@ -208,6 +228,11 @@ export class Game {
       today,
       archive: this.mode === "daily" && this.dateKey !== today,
       muted: Boolean(this.save.settings?.muted),
+      variant: this.variant,
+      variantLabel: VARIANT_LABEL[this.variant],
+      teach: VARIANT_TEACH[this.variant],
+      braking: Boolean(world?.braking),
+      beatMuted: this.beatMuted,
     };
   }
 }
@@ -219,6 +244,9 @@ function idleIntent(): Intent {
     pointerX: 0,
     restart: false,
     toTitle: false,
+    brake: false,
+    laneDelta: 0,
+    touchScoring: false,
   };
 }
 

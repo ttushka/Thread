@@ -6,6 +6,13 @@ import { mountCanvas } from "./game/render/canvas.ts";
 import { drawFrame } from "./game/render/draw.ts";
 import { parseDeepLink } from "./game/share.ts";
 import { utcDateKey } from "./game/seed.ts";
+import { playBeatClick } from "./game/beatClick.ts";
+import {
+  parseVariant,
+  variantSearchParam,
+  type ExperimentVariant,
+  VARIANT_KEYS,
+} from "./game/variant.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
@@ -18,8 +25,12 @@ const hudMode = must("#hud-mode");
 const hudScore = must("#hud-score");
 const hudCombo = must("#hud-combo");
 const hudBest = must("#hud-best");
+const hudVariant = must("#hud-variant");
+const hudSlow = must("#hud-slow");
 const titleEndlessBest = must("#title-endless-best");
 const titleDailyMeta = must("#title-daily-meta");
+const titleVariantBadge = must("#title-variant-badge");
+const experimentTeach = must("#experiment-teach");
 const resultKicker = must("#result-kicker");
 const resultHeading = must("#result-heading");
 const resultSub = must("#result-sub");
@@ -32,10 +43,13 @@ const btnMenu = must<HTMLButtonElement>("#btn-menu");
 const btnMotion = must<HTMLButtonElement>("#btn-motion");
 const btnSound = must<HTMLButtonElement>("#btn-sound");
 const btnHudSound = must<HTMLButtonElement>("#btn-hud-sound");
+const btnBeatMute = must<HTMLButtonElement>("#btn-beat-mute");
+const btnBrake = must<HTMLButtonElement>("#btn-brake");
 
 const view = mountCanvas(canvas);
 const game = new Game(window.localStorage);
 game.prefersReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+game.setVariant(parseVariant(window.location.search));
 
 const audio = createAudioBed();
 audio.setMuted(Boolean(game.save.settings?.muted));
@@ -48,6 +62,8 @@ const input = createInput({
   canvas,
   getMap: () => view.map,
   canQueueRestart: () => game.screen === "dead" || game.screen === "cleared",
+  variant: () => game.variant,
+  playing: () => game.screen === "play",
 });
 
 let overlayRetryArmed = false;
@@ -99,6 +115,10 @@ btnHudSound.addEventListener("click", (e) => {
   audio.setMuted(game.snapshot().muted);
   paintChrome(true);
 });
+btnBeatMute.addEventListener("click", () => {
+  game.toggleBeatMute();
+  paintChrome(true);
+});
 btnShare.addEventListener("click", async () => {
   const line = game.snapshot().shareLine;
   if (!line) return;
@@ -112,6 +132,39 @@ btnShare.addEventListener("click", async () => {
     window.prompt("Copy challenge", line);
   }
 });
+
+for (const chip of document.querySelectorAll<HTMLButtonElement>("[data-variant]")) {
+  chip.addEventListener("click", () => {
+    const key = chip.dataset.variant as ExperimentVariant | undefined;
+    if (!key) return;
+    applyVariant(key);
+  });
+}
+
+function applyVariant(variant: ExperimentVariant): void {
+  game.setVariant(variant);
+  const url = new URL(window.location.href);
+  const param = variantSearchParam(variant);
+  if (param) url.searchParams.set("variant", param);
+  else url.searchParams.delete("variant");
+  window.history.replaceState(null, "", url);
+  paintChrome(true);
+}
+
+const holdBrake = (e: Event) => {
+  e.preventDefault();
+  input.setBrakeHold(true);
+  btnBrake.classList.add("held");
+};
+const releaseBrake = () => {
+  input.setBrakeHold(false);
+  btnBrake.classList.remove("held");
+};
+btnBrake.addEventListener("pointerdown", holdBrake);
+btnBrake.addEventListener("pointerup", releaseBrake);
+btnBrake.addEventListener("pointerleave", releaseBrake);
+btnBrake.addEventListener("pointercancel", releaseBrake);
+btnBrake.addEventListener("contextmenu", (e) => e.preventDefault());
 
 const deep = parseDeepLink(window.location.search);
 if (deep.mode === "daily") {
@@ -146,6 +199,28 @@ function paintChrome(force = false): void {
   btnHudSound.textContent = soundLabel;
   btnSound.setAttribute("aria-pressed", snap.muted ? "false" : "true");
   btnHudSound.setAttribute("aria-pressed", snap.muted ? "false" : "true");
+  experimentTeach.textContent = snap.teach;
+  btnBeatMute.classList.toggle("hidden", snap.variant !== "beat");
+  btnBeatMute.textContent = snap.beatMuted ? "Click: off" : "Click: on";
+
+  const showBadge = snap.variant !== "control";
+  titleVariantBadge.classList.toggle("hidden", !showBadge);
+  titleVariantBadge.textContent = snap.variantLabel;
+  hudVariant.hidden = onTitle || !showBadge;
+  hudVariant.textContent = snap.variantLabel;
+
+  for (const key of VARIANT_KEYS) {
+    const chip = document.querySelector<HTMLButtonElement>(`[data-variant="${key}"]`);
+    chip?.classList.toggle("active", key === snap.variant);
+  }
+
+  const showBrake = !onTitle && !onResult && snap.variant === "brake";
+  btnBrake.classList.toggle("hidden", !showBrake);
+  if (!showBrake) {
+    input.setBrakeHold(false);
+    btnBrake.classList.remove("held");
+  }
+  hudSlow.hidden = !snap.braking;
 
   if (!onTitle) {
     hudMode.textContent = snap.mode === "daily" ? `Daily Challenge · ${snap.dateKey}` : "Endless";
@@ -164,7 +239,8 @@ function paintChrome(force = false): void {
     resultKicker.textContent = snap.screen === "cleared" ? "Daily clear" : "Thread snagged";
     resultHeading.textContent = snap.score.toLocaleString("en-US");
     const secs = (snap.timeMs / 1000).toFixed(1);
-    resultSub.textContent = `${Math.floor(snap.distance)} distance · ${snap.cleanPasses} clean · combo peak ${snap.comboPeak} · ${secs}s`;
+    const perfectBit = snap.variant === "beat" ? ` · ${snap.perfects} perfect` : "";
+    resultSub.textContent = `${Math.floor(snap.distance)} distance · ${snap.cleanPasses} clean${perfectBit} · combo peak ${snap.comboPeak} · ${secs}s`;
     if (snap.shareLine) {
       resultShare.classList.remove("hidden");
       resultShare.textContent = snap.shareLine;
@@ -183,6 +259,10 @@ const loop = createLoop(
     if (game.screen === "title") audio.leaveRun();
     else audio.enterRun();
     for (const cue of game.drainSfx()) audio.play(cue);
+    if (game.world?.beatClick && game.variant === "beat" && !game.beatMuted && game.screen === "play") {
+      playBeatClick();
+    }
+    if (game.world) game.world.beatClick = false;
   },
   (alpha) => {
     drawFrame(view, game.world, alpha, game.screen === "title" && !game.save.settings?.reducedMotion);

@@ -1,6 +1,14 @@
 import type { CourseSpec, ObstacleSpec, StreamEvent, WallKeyframe } from "../../types.ts";
 import { Rng } from "../rng.ts";
-import { DIST, FIELD_W, KEYFRAME_PAD, WALL_MARGIN } from "./constants.ts";
+import {
+  BASE_SPEED,
+  CX,
+  DIST,
+  FIELD_W,
+  KEYFRAME_PAD,
+  THREAD_RADIUS,
+  WALL_MARGIN,
+} from "./constants.ts";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -43,28 +51,58 @@ export function sampleWalls(
   };
 }
 
-function placeTunnel(
+function tunnelBounds(gap: number): { minCenter: number; maxCenter: number } {
+  return {
+    minCenter: WALL_MARGIN + gap / 2,
+    maxCenter: FIELD_W - WALL_MARGIN - gap / 2,
+  };
+}
+
+/** Non-scoring rest / teach tunnels. Small wander is allowed; no L/R alternation. */
+function placeRest(
   rng: Rng,
   y: number,
   gapMin: number,
   gapMax: number,
   wander: number,
   prevCenter: number,
-  asGate: boolean,
-  nextId: () => number,
-): { kf: WallKeyframe; center: number; spec: ObstacleSpec | null } {
+): { kf: WallKeyframe; center: number } {
   const gap = rng.float(gapMin, gapMax);
-  const minCenter = WALL_MARGIN + gap / 2;
-  const maxCenter = FIELD_W - WALL_MARGIN - gap / 2;
+  const { minCenter, maxCenter } = tunnelBounds(gap);
   const center = clamp(prevCenter + rng.float(-wander, wander), minCenter, maxCenter);
+  return {
+    kf: { y, left: center - gap / 2, right: center + gap / 2, gateId: null },
+    center,
+  };
+}
+
+/**
+ * Scoring gate: forced offset from CX, not prevCenter+wander.
+ * Offset is raised if needed so holding x=CX is a death (not a nick-through).
+ */
+function placeScoringGate(
+  rng: Rng,
+  y: number,
+  gapMin: number,
+  gapMax: number,
+  minOffset: number,
+  offJitter: number,
+  side: number,
+  nextId: () => number,
+): { kf: WallKeyframe; center: number; spec: ObstacleSpec } {
+  const gap = rng.float(gapMin, gapMax);
+  let off = minOffset + rng.float(0, offJitter);
+  const killOff = gap / 2 - THREAD_RADIUS + 0.5;
+  if (off < killOff) off = killOff;
+  const { minCenter, maxCenter } = tunnelBounds(gap);
+  const center = clamp(CX + side * off, minCenter, maxCenter);
   const left = center - gap / 2;
   const right = center + gap / 2;
-  let spec: ObstacleSpec | null = null;
-  let gateId: number | null = null;
-  if (asGate) {
-    const id = nextId();
-    gateId = id;
-    spec = {
+  const id = nextId();
+  return {
+    kf: { y, left, right, gateId: id },
+    center,
+    spec: {
       id,
       kind: "gate",
       y,
@@ -76,38 +114,108 @@ function placeTunnel(
       amplitude: 0,
       period: 1,
       phase: 0,
-    };
-  }
-  return {
-    kf: { y, left, right, gateId },
-    center,
-    spec,
+    },
   };
 }
 
-function placeMover(
-  rng: Rng,
-  y: number,
-  nextId: () => number,
-): ObstacleSpec {
-  const gapWidth = rng.float(118, 150);
-  const amplitude = rng.float(36, 64);
-  const minCenter = WALL_MARGIN + gapWidth / 2 + amplitude;
-  const maxCenter = FIELD_W - WALL_MARGIN - gapWidth / 2 - amplitude;
-  const baseCenter = rng.float(minCenter, Math.max(minCenter + 1, maxCenter));
-  return {
-    id: nextId(),
-    kind: "mover",
-    y,
-    left: baseCenter - gapWidth / 2,
-    right: baseCenter + gapWidth / 2,
-    thickness: 14,
-    baseCenter,
-    gapWidth,
-    amplitude,
-    period: rng.float(2.4, 3.4),
-    phase: rng.float(0, Math.PI * 2),
+const MOVER_THICKNESS = 14;
+const MOVER_UNSAFE_MIN = 0.35;
+const PHASE_STEPS = 96;
+
+/** Seconds in the telegraph window around contact where CX is outside the moving gap. */
+export function moverUnsafeDuration(spec: ObstacleSpec, threadX = CX): number {
+  const band = spec.thickness + THREAD_RADIUS;
+  const t0 = Math.max(0, (spec.y - band) / BASE_SPEED);
+  const t1 = (spec.y + band) / BASE_SPEED;
+  const span = t1 - t0;
+  if (span <= 0) return 0;
+  const samples = 64;
+  let unsafe = 0;
+  const dt = span / samples;
+  for (let i = 0; i < samples; i++) {
+    const t = t0 + (i + 0.5) * dt;
+    const gap = moverGap(spec, t);
+    if (threadX < gap.left || threadX > gap.right) unsafe += dt;
+  }
+  return unsafe;
+}
+
+function moverSlabKillsCenter(spec: ObstacleSpec, threadX = CX): boolean {
+  const half = spec.thickness / 2;
+  const t0 = Math.max(0, (spec.y - half) / BASE_SPEED);
+  const t1 = (spec.y + half) / BASE_SPEED;
+  const samples = 24;
+  const dt = (t1 - t0) / samples;
+  for (let i = 0; i < samples; i++) {
+    const t = t0 + (i + 0.5) * dt;
+    const gap = moverGap(spec, t);
+    if (threadX >= gap.left + THREAD_RADIUS && threadX <= gap.right - THREAD_RADIUS) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function searchMoverPhase(base: ObstacleSpec): { phase: number; unsafe: number; kills: boolean } {
+  let best = { phase: 0, unsafe: -1, kills: false };
+  for (let i = 0; i < PHASE_STEPS; i++) {
+    const phase = (i / PHASE_STEPS) * Math.PI * 2;
+    const spec = { ...base, phase };
+    const kills = moverSlabKillsCenter(spec);
+    const unsafe = moverUnsafeDuration(spec);
+    const better =
+      (kills && !best.kills) ||
+      (kills === best.kills && unsafe > best.unsafe);
+    if (better) best = { phase, unsafe, kills };
+  }
+  return best;
+}
+
+function placeMover(rng: Rng, y: number, side: number, nextId: () => number): ObstacleSpec {
+  const id = nextId();
+  let gapWidth = rng.float(100, 120);
+  let amplitude = rng.float(56, 72);
+  const period = rng.float(2.5, 3.2);
+  let offset = rng.float(40, 70);
+
+  const fit = (): ObstacleSpec => {
+    const half = gapWidth / 2;
+    const minC = WALL_MARGIN + half;
+    const maxC = FIELD_W - WALL_MARGIN - half;
+    let baseCenter = clamp(CX + side * offset, minC, maxC);
+    if (Math.abs(baseCenter - CX) < 40) {
+      const pushed = CX + side * Math.max(40, offset);
+      baseCenter = clamp(pushed, minC, maxC);
+    }
+    return {
+      id,
+      kind: "mover",
+      y,
+      left: baseCenter - half,
+      right: baseCenter + half,
+      thickness: MOVER_THICKNESS,
+      baseCenter,
+      gapWidth,
+      amplitude,
+      period,
+      phase: 0,
+    };
   };
+
+  let spec = fit();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (attempt > 0) {
+      amplitude = Math.min(80, amplitude + 8);
+      offset = Math.min(90, offset + 10);
+      spec = fit();
+    }
+    const found = searchMoverPhase(spec);
+    spec.phase = found.phase;
+    if (found.kills && found.unsafe >= MOVER_UNSAFE_MIN) return spec;
+  }
+  const found = searchMoverPhase(spec);
+  spec.phase = found.phase;
+  return spec;
 }
 
 export type CourseOptions = {
@@ -127,23 +235,33 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
   let nextIdNum = 1;
   const nextId = () => nextIdNum++;
   let y = -KEYFRAME_PAD;
-  let center = FIELD_W / 2;
+  let center = CX;
+  /** Weave side for scoring gates. Chosen once at openEnd, then flips every scoring gate. */
+  let side: -1 | 1 = 1;
 
-  const push = (
+  const pushRest = (gapMin: number, gapMax: number, wander: number, dy: number) => {
+    y += dy;
+    const placed = placeRest(rng, y, gapMin, gapMax, wander, center);
+    center = placed.center;
+    keyframes.push(placed.kf);
+  };
+
+  const pushGate = (
     gapMin: number,
     gapMax: number,
-    wander: number,
-    asGate: boolean,
+    minOffset: number,
+    offJitter: number,
     dy: number,
   ) => {
     y += dy;
-    const placed = placeTunnel(rng, y, gapMin, gapMax, wander, center, asGate, nextId);
+    const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId);
+    side = -side as -1 | 1;
     center = placed.center;
     keyframes.push(placed.kf);
-    if (placed.spec) obstacles.push(placed.spec);
+    obstacles.push(placed.spec);
   };
 
-  // 0–5s: soft curve, no fail. Wide corridor, gentle wander, not scoring gates.
+  // 0–5s: soft teach. Wide corridor, gentle wander, not scoring gates.
   keyframes.push({
     y: -KEYFRAME_PAD,
     left: 40,
@@ -151,49 +269,54 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
     gateId: null,
   });
   while (y < DIST.openEnd) {
-    push(248, 292, 16, false, rng.float(70, 90));
+    pushRest(260, 300, 16, rng.float(70, 90));
   }
+  side = rng.pick([-1, 1] as const);
 
-  // 5–20s: first readable pinches. One knob: gap width.
+  // 5–20s: first pinches. Forced weave; holding CX dies.
   while (y < DIST.pinchEnd) {
-    push(132, 168, 46, true, rng.float(100, 128));
+    const step = rng.float(105, 125);
+    if (y + step >= DIST.pinchEnd) break;
+    pushGate(118, 142, 52, 14, step);
   }
 
-  // 20–40s: one telegraphing moving hazard among readable pinches.
+  // 20–40s: readable pinches + one telegraphing mover that punishes static center.
   const moverAt = DIST.pinchEnd + rng.float(280, 520);
   let moverPlaced = false;
   while (y < DIST.moverEnd) {
-    const step = rng.float(110, 140);
+    const step = rng.float(110, 135);
     if (!moverPlaced && y + step >= moverAt) {
       const my = moverAt;
-      obstacles.push(placeMover(rng, my, nextId));
+      obstacles.push(placeMover(rng, my, side, nextId));
       moverPlaced = true;
-      // Keep tunnel generous around the mover so the mover is the readable threat.
       y = my;
-      const around = placeTunnel(rng, y, 188, 220, 28, center, false, nextId);
+      const around = placeRest(rng, y, 188, 220, 16, center);
       center = around.center;
       keyframes.push(around.kf);
       continue;
     }
-    push(124, 158, 50, true, step);
+    if (y + step >= DIST.moverEnd) break;
+    pushGate(110, 136, 58, 12, step);
   }
   if (!moverPlaced) {
-    obstacles.push(placeMover(rng, DIST.pinchEnd + 360, nextId));
+    obstacles.push(placeMover(rng, DIST.pinchEnd + 360, side, nextId));
+  }
+  if (y < DIST.moverEnd) {
+    pushRest(188, 220, 16, DIST.moverEnd - y);
   }
 
-  // 40–60s: 2–3 gate rhythm, then a soft rest.
-  const rhythmCount = rng.int(2, 3);
-  for (let i = 0; i < rhythmCount; i++) {
-    push(102, 128, 54, true, rng.float(88, 108));
+  // 40–60s: exactly 3 rhythm gates, then a soft rest.
+  for (let i = 0; i < 3; i++) {
+    pushGate(96, 118, 64, 10, rng.float(88, 108));
   }
   while (y < DIST.rhythmEnd) {
-    push(176, 214, 24, false, rng.float(90, 120));
+    pushRest(210, 240, 12, rng.float(90, 120));
   }
 
   let finishY: number | null = null;
   if (opts.daily) {
     // Soft land into a finish line — same for a given seed, fair snag if you miss the rest.
-    push(210, 240, 12, false, 90);
+    pushRest(210, 240, 12, 90);
     finishY = DIST.dailyFinish;
     keyframes.push({
       y: finishY + KEYFRAME_PAD,
@@ -210,21 +333,22 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
       const tighten = Math.min(36, segment * 3);
       const gapMin = Math.max(78, 118 - tighten);
       const gapMax = Math.max(gapMin + 12, 150 - tighten);
+      const minOffset = Math.min(72, 52 + segment * 2);
       const spacing = knob === 1 ? rng.float(78, 96) : rng.float(96, 124);
       const end = y + 900;
       let lastMover = y - 400;
       while (y < end && y < horizon) {
         if (knob === 2 && y - lastMover > rng.float(380, 560)) {
           const my = y + rng.float(40, 80);
-          obstacles.push(placeMover(rng, my, nextId));
+          obstacles.push(placeMover(rng, my, side, nextId));
           lastMover = my;
           y = my;
-          const around = placeTunnel(rng, y, gapMin + 40, gapMax + 50, 30, center, false, nextId);
+          const around = placeRest(rng, y, gapMin + 40, gapMax + 50, 16, center);
           center = around.center;
           keyframes.push(around.kf);
           continue;
         }
-        push(gapMin, gapMax, 52 + Math.min(18, segment), true, spacing);
+        pushGate(gapMin, gapMax, minOffset, 12, spacing);
       }
     }
     keyframes.push({

@@ -44,6 +44,11 @@ export class Rng {
     return min + Math.floor(this.next() * span);
   }
 
+  pick<T>(items: readonly T[]): T {
+    if (items.length === 0) throw new Error("Rng.pick: empty list");
+    return items[this.int(0, items.length - 1)]!;
+  }
+
   get drawCount(): number {
     return this.draws;
   }

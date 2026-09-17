@@ -18,6 +18,24 @@ describe("combo", () => {
       reducedMotion: true,
       endlessHorizon: 2500,
     });
+    // Wide opening-corridor gate so this test locks combo math, not course weave.
+    world.obstacles = [
+      {
+        id: 1,
+        kind: "gate",
+        y: 200,
+        left: 100,
+        right: 260,
+        thickness: 10,
+        baseCenter: 180,
+        gapWidth: 160,
+        amplitude: 0,
+        period: 1,
+        phase: 0,
+        passed: false,
+        nicked: false,
+      },
+    ];
     for (let i = 0; i < 60 * 12; i++) {
       updateWorld(world, hold(0), TICK);
       if (world.combo >= 1) break;

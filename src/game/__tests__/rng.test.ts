@@ -30,5 +30,9 @@ describe("Rng", () => {
       expect(n).toBeGreaterThanOrEqual(2);
       expect(n).toBeLessThanOrEqual(5);
     }
+    const rng3 = new Rng(11);
+    expect([-1, 1]).toContain(rng3.pick([-1, 1] as const));
+    const picks = Array.from({ length: 40 }, () => new Rng(11).pick(["a", "b", "c"]));
+    expect(picks.every((p) => p === picks[0])).toBe(true);
   });
 });

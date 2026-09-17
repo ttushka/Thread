@@ -1,13 +1,15 @@
 import type { ObstacleSpec } from "../../types.ts";
-import { NICK_BAND, THREAD_RADIUS } from "./constants.ts";
+import { NEAR_MISS_BAND, NICK_BAND, THREAD_RADIUS } from "./constants.ts";
 
-export type Hit = "none" | "nick" | "death";
+export type Hit = "none" | "nearMiss" | "nick" | "death";
 
 export function classifyGapHit(x: number, left: number, right: number, radius = THREAD_RADIUS): Hit {
   const innerL = left + radius;
   const innerR = right - radius;
   if (x < innerL || x > innerR) return "death";
-  if (x < innerL + NICK_BAND || x > innerR - NICK_BAND) return "nick";
+  const edgeDist = Math.min(x - innerL, innerR - x);
+  if (edgeDist < NICK_BAND) return "nick";
+  if (edgeDist < NICK_BAND + NEAR_MISS_BAND) return "nearMiss";
   return "none";
 }
 

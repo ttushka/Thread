@@ -175,6 +175,7 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   if (dissolve >= 1) return;
 
   const bright = world.nearMissTimer > 0 && world.alive;
+  const charged = world.tension > 0 && world.alive;
   ctx.globalAlpha = 1 - dissolve;
 
   ctx.beginPath();
@@ -194,7 +195,7 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.shadowColor = THREAD;
-  ctx.shadowBlur = bright ? 22 : 12;
+  ctx.shadowBlur = bright ? 22 : charged ? 16 : 12;
   ctx.strokeStyle = THREAD_DIM;
   ctx.lineWidth = bright ? 9.5 : 8;
   ctx.stroke();

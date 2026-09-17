@@ -8,6 +8,8 @@ describe("collision bands", () => {
     expect(classifyGapHit(180, 100, 260)).toBe("none");
     expect(classifyGapHit(108, 100, 260)).toBe("nick");
     expect(classifyGapHit(252, 100, 260)).toBe("nick");
+    expect(classifyGapHit(118, 100, 260)).toBe("nearMiss");
+    expect(classifyGapHit(242, 100, 260)).toBe("nearMiss");
     expect(classifyGapHit(90, 100, 260)).toBe("death");
     expect(classifyGapHit(270, 100, 260)).toBe("death");
   });

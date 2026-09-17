@@ -8,6 +8,8 @@ export const THREAD_SCREEN_Y = 470;
 
 export const THREAD_RADIUS = 5;
 export const NICK_BAND = 8;
+/** Inside the safe gap, adjacent to nick — ~10–14px from the graze edge. */
+export const NEAR_MISS_BAND = 12;
 
 export const BASE_SPEED = 90;
 export const NICK_SLOW = 0.42;
@@ -15,7 +17,10 @@ export const NICK_MS = 300;
 export const DEATH_FREEZE_MS = 200;
 export const DEATH_FLASH_MS = 100;
 export const DEATH_DISSOLVE_MS = 260;
-export const NEAR_MISS_MS = 100;
+export const NEAR_MISS_MS = 140;
+export const TENSION_CAP = 3;
+export const TENSION_HOLD_MS = 1200;
+export const TENSION_GAIN_LOCK_MS = 200;
 /** Clean Pass thread accent. Same family as near-miss; brief 80–120ms. */
 export const CLEAN_PASS_FLASH_MS = 120;
 /** Static scoring-gate lips. Same slab family as movers, thinner, not animated. */

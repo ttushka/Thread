@@ -61,6 +61,7 @@ body {
   inset: 0;
   pointer-events: none;
   padding: max(12px, env(safe-area-inset-top)) 16px 16px;
+  z-index: 1;
 }
 
 .hud-top {
@@ -105,9 +106,14 @@ body {
 
 .hud-sound {
   position: absolute;
-  bottom: max(12px, env(safe-area-inset-bottom));
-  right: 16px;
+  bottom: max(4px, env(safe-area-inset-bottom));
+  right: 4px;
   pointer-events: auto;
+  z-index: 2;
+  min-height: 44px;
+  min-width: 72px;
+  padding: 10px 12px;
+  text-align: right;
 }
 
 .settings {

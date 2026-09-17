@@ -36,6 +36,12 @@ describe("share line", () => {
     expect(dailyDeepLink("2026-09-17", "https://play.example/thread")).toBe(
       "https://play.example/thread?daily=2026-09-17",
     );
+    expect(dailyDeepLink("2026-09-17", "https://ttushka.github.io/Thread")).toBe(
+      "https://ttushka.github.io/Thread?daily=2026-09-17",
+    );
+    expect(dailyDeepLink("2026-09-17", "https://ttushka.github.io/Thread/")).toBe(
+      "https://ttushka.github.io/Thread/?daily=2026-09-17",
+    );
   });
 
   it("parses daily deep links", () => {

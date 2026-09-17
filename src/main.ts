@@ -1,4 +1,5 @@
 import { Game } from "./game/Game.ts";
+import { createAudioBed } from "./game/audio.ts";
 import { createInput, isOverlayRetryTarget } from "./game/input.ts";
 import { createLoop } from "./game/loop.ts";
 import { mountCanvas } from "./game/render/canvas.ts";
@@ -41,6 +42,8 @@ const btnRetry = must<HTMLButtonElement>("#btn-retry");
 const btnShare = must<HTMLButtonElement>("#btn-share");
 const btnMenu = must<HTMLButtonElement>("#btn-menu");
 const btnMotion = must<HTMLButtonElement>("#btn-motion");
+const btnSound = must<HTMLButtonElement>("#btn-sound");
+const btnHudSound = must<HTMLButtonElement>("#btn-hud-sound");
 const btnBeatMute = must<HTMLButtonElement>("#btn-beat-mute");
 const btnBrake = must<HTMLButtonElement>("#btn-brake");
 
@@ -48,6 +51,13 @@ const view = mountCanvas(canvas);
 const game = new Game(window.localStorage);
 game.prefersReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 game.setVariant(parseVariant(window.location.search));
+
+const audio = createAudioBed();
+audio.setMuted(Boolean(game.save.settings?.muted));
+
+const unlockAudio = () => audio.unlock();
+window.addEventListener("pointerdown", unlockAudio);
+window.addEventListener("keydown", unlockAudio);
 
 const input = createInput({
   canvas,
@@ -72,12 +82,38 @@ resultEl.addEventListener("pointercancel", () => {
   overlayRetryArmed = false;
 });
 
-btnEndless.addEventListener("click", () => game.startEndless());
-btnDaily.addEventListener("click", () => game.startDaily());
-btnRetry.addEventListener("click", () => game.restart());
-btnMenu.addEventListener("click", () => game.toTitle());
+btnEndless.addEventListener("click", () => {
+  audio.unlock();
+  game.startEndless();
+  audio.enterRun();
+});
+btnDaily.addEventListener("click", () => {
+  audio.unlock();
+  game.startDaily();
+  audio.enterRun();
+});
+btnRetry.addEventListener("click", () => {
+  audio.unlock();
+  game.restart();
+  audio.enterRun();
+});
+btnMenu.addEventListener("click", () => {
+  game.toTitle();
+  audio.leaveRun();
+});
 btnMotion.addEventListener("click", () => {
   game.toggleReducedMotion();
+  paintChrome(true);
+});
+btnSound.addEventListener("click", () => {
+  game.toggleMuted();
+  audio.setMuted(game.snapshot().muted);
+  paintChrome(true);
+});
+btnHudSound.addEventListener("click", (e) => {
+  e.stopPropagation();
+  game.toggleMuted();
+  audio.setMuted(game.snapshot().muted);
   paintChrome(true);
 });
 btnBeatMute.addEventListener("click", () => {
@@ -159,6 +195,11 @@ function paintChrome(force = false): void {
   const attempts = snap.dailyAttempts > 0 ? ` · ${snap.dailyAttempts} attempts` : "";
   titleDailyMeta.textContent = `${today} · resets at 00:00 UTC · ${dailyBestText}${attempts}`;
   btnMotion.textContent = snap.reducedMotion ? "Motion: reduced" : "Motion: full";
+  const soundLabel = snap.muted ? "Sound: off" : "Sound: on";
+  btnSound.textContent = soundLabel;
+  btnHudSound.textContent = soundLabel;
+  btnSound.setAttribute("aria-pressed", snap.muted ? "false" : "true");
+  btnHudSound.setAttribute("aria-pressed", snap.muted ? "false" : "true");
   experimentTeach.textContent = snap.teach;
   btnBeatMute.classList.toggle("hidden", snap.variant !== "beat");
   btnBeatMute.textContent = snap.beatMuted ? "Click: off" : "Click: on";
@@ -225,6 +266,9 @@ const loop = createLoop(
   (dt) => {
     const intent = input.poll();
     game.tick(intent, dt);
+    if (game.screen === "title") audio.leaveRun();
+    else audio.enterRun();
+    for (const cue of game.drainSfx()) audio.play(cue);
     if (game.world?.beatClick && game.variant === "beat" && !game.beatMuted && game.screen === "play") {
       playBeatClick();
     }

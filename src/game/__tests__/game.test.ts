@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Game } from "../Game.ts";
 import { isOverlayRetryTarget } from "../input.ts";
 import { SAVE_KEY, type StorageLike } from "../persistence.ts";
-import { TICK } from "../world/constants.ts";
+import { DIST, TICK } from "../world/constants.ts";
 import { createWorld, deathPhase } from "../world/simulate.ts";
 import type { Intent } from "../../types.ts";
 
@@ -109,6 +109,39 @@ describe("Daily clear path", () => {
     expect(game.screen).toBe("dead");
     expect(game.snapshot().shareLine).toMatch(/beat my score/);
     expect(game.snapshot().shareLine).not.toMatch(/\btime\b/i);
+  });
+});
+
+describe("sound setting", () => {
+  it("toggles muted into thread.v1", () => {
+    const storage = new MemoryStorage();
+    const game = new Game(storage);
+    expect(game.snapshot().muted).toBe(false);
+    game.toggleMuted();
+    expect(game.snapshot().muted).toBe(true);
+    const parsed = JSON.parse(storage.getItem(SAVE_KEY)!) as { settings?: { muted?: boolean } };
+    expect(parsed.settings?.muted).toBe(true);
+    game.toggleMuted();
+    expect(game.snapshot().muted).toBe(false);
+  });
+
+  it("drains death sfx once when a run snags", () => {
+    const game = new Game(new MemoryStorage(), { endlessSeed: 1 });
+    game.startEndless();
+    const world = game.world!;
+    world.course.keyframes = [
+      { y: 0, left: 100, right: 260, gateId: null },
+      { y: 8000, left: 100, right: 260, gateId: null },
+    ];
+    world.obstacles.length = 0;
+    world.distance = DIST.openEnd + 20;
+    world.prevDistance = world.distance;
+    world.x = 8;
+    game.tick({ ...idle, pointerActive: true, pointerX: 8 }, TICK);
+    expect(game.screen).toBe("dead");
+    expect(game.drainSfx()).toEqual(["death"]);
+    game.tick(idle, TICK);
+    expect(game.drainSfx()).toEqual([]);
   });
 });
 

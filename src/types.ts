@@ -2,6 +2,8 @@ export type Mode = "endless" | "daily";
 
 export type Screen = "title" | "play" | "dead" | "cleared";
 
+export type SfxCue = "nick" | "clean" | "tension" | "death" | "clear";
+
 export type ThreadSaveV1 = {
   v: 1;
   endlessBest: number;
@@ -12,6 +14,7 @@ export type ThreadSaveV1 = {
   };
   settings?: {
     reducedMotion?: boolean;
+    muted?: boolean;
   };
 };
 

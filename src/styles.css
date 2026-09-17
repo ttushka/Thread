@@ -143,6 +143,20 @@ body {
   left: 16px;
 }
 
+.hud-sound {
+  position: absolute;
+  bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px));
+  left: 16px;
+  pointer-events: auto;
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  margin-top: 4px;
+}
+
 .overlay {
   position: absolute;
   inset: 0;
@@ -341,11 +355,6 @@ h2 {
 .brake-btn.held {
   border-color: var(--thread);
   color: var(--thread);
-}
-
-#btn-beat-mute {
-  display: block;
-  margin-top: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

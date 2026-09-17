@@ -5,3 +5,4 @@ thread-itch.zip
 *.local
 .vite
 coverage
+.audio-build

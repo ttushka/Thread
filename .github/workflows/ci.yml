@@ -17,3 +17,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Itch HTML5 zip
+        run: npm run build:itch
+        env:
+          VITE_BASE: ./
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thread-itch
+          path: thread-itch.zip

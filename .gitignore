@@ -1,5 +1,6 @@
 node_modules
 dist
+thread-itch.zip
 .DS_Store
 *.local
 .vite

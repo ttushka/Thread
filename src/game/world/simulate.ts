@@ -74,7 +74,7 @@ export function createWorld(
     comboPeak: 0,
     cleanPasses: 0,
     time: 0,
-    trail: [{ x, d: 0 }],
+    trail: seedTrail(x),
     particles: [],
     reducedMotion: opts.reducedMotion,
     obstacles: course.obstacles.map((o) => ({ ...o, passed: false, nicked: false })),
@@ -175,14 +175,25 @@ function applyHit(world: World, hit: "none" | "nick" | "death", obs: ObstacleRun
   }
 }
 
+function seedTrail(x: number): { x: number; d: number }[] {
+  const pts: { x: number; d: number }[] = [];
+  for (let i = 18; i >= 0; i--) {
+    pts.push({ x, d: -i * 10 });
+  }
+  return pts;
+}
+
 function pushTrail(world: World): void {
   const last = world.trail[world.trail.length - 1];
-  if (!last || Math.abs(last.x - world.x) > 0.4 || world.distance - last.d > 4) {
+  if (!last) {
+    world.trail.push({ x: world.x, d: world.distance });
+    return;
+  }
+  const dd = world.distance - last.d;
+  const dx = Math.abs(last.x - world.x);
+  if (dd > 3 || dx > 0.6) {
     world.trail.push({ x: world.x, d: world.distance });
     if (world.trail.length > TRAIL_MAX) world.trail.shift();
-  } else {
-    last.x = world.x;
-    last.d = world.distance;
   }
 }
 

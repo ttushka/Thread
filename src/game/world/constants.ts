@@ -1,5 +1,7 @@
 export const FIELD_W = 360;
 export const FIELD_H = 640;
+/** Playfield centerline. Scoring gates after openEnd must sit off this line. */
+export const CX = FIELD_W / 2;
 
 /** Thread head screen Y in playfield pixels (from top). */
 export const THREAD_SCREEN_Y = 470;

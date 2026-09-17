@@ -11,7 +11,15 @@ type InputOptions = {
   canvas: HTMLCanvasElement;
   getMap: () => PlayfieldMap;
   onFocus?: () => void;
+  /** True while a result overlay (or death freeze) can accept tap-to-retry. */
+  canQueueRestart?: () => boolean;
 };
+
+/** Overlay backdrop / panel taps retry; action buttons keep their own handlers. */
+export function isOverlayRetryTarget(target: EventTarget | null): boolean {
+  if (!target || typeof (target as Element).closest !== "function") return true;
+  return !(target as Element).closest("button");
+}
 
 export function createInput(opts: InputOptions): {
   poll: () => Intent;
@@ -22,6 +30,7 @@ export function createInput(opts: InputOptions): {
   let pointerX = FIELD_W / 2;
   let restartQueued = false;
   let titleQueued = false;
+  let pointerRestartArmed = false;
 
   const down = (e: KeyboardEvent) => {
     const k = e.key;
@@ -56,6 +65,7 @@ export function createInput(opts: InputOptions): {
     opts.canvas.setPointerCapture(e.pointerId);
     pointerActive = true;
     pointerX = clientToField(e.clientX);
+    pointerRestartArmed = Boolean(opts.canQueueRestart?.());
     opts.onFocus?.();
     e.preventDefault();
   };
@@ -65,13 +75,17 @@ export function createInput(opts: InputOptions): {
     e.preventDefault();
   };
   const pointerUp = (e: PointerEvent) => {
-    if (!pointerActive) return;
-    pointerActive = false;
-    try {
-      opts.canvas.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
+    const shouldRestart = pointerRestartArmed && Boolean(opts.canQueueRestart?.());
+    pointerRestartArmed = false;
+    if (pointerActive) {
+      pointerActive = false;
+      try {
+        opts.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
     }
+    if (shouldRestart) restartQueued = true;
   };
 
   window.addEventListener("keydown", down);

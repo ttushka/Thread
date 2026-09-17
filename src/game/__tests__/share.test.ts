@@ -2,17 +2,33 @@ import { describe, expect, it } from "vitest";
 import { dailyDeepLink, formatDailyShare, formatRunTime, parseDeepLink, seedTag } from "../share.ts";
 
 describe("share line", () => {
-  it("emits the growth-ready Daily line", () => {
+  it("uses clear-time wording only after a real Daily clear", () => {
     const line = formatDailyShare({
       dateKey: "2026-09-17",
       score: 12340,
       timeMs: 42_000,
       seed: 0xabc12,
       url: "https://example.com/thread/?daily=2026-09-17",
+      cleared: true,
     });
     expect(line).toBe(
       "Thread Daily 2026-09-17 — 12,340/0:42 · seed 000abc12 · beat my time: https://example.com/thread/?daily=2026-09-17",
     );
+  });
+
+  it("says beat my score on a score-based death run", () => {
+    const line = formatDailyShare({
+      dateKey: "2026-09-17",
+      score: 3911,
+      timeMs: 28_800,
+      seed: 0xabc12,
+      url: "https://example.com/thread/?daily=2026-09-17",
+      cleared: false,
+    });
+    expect(line).toBe(
+      "Thread Daily 2026-09-17 — 3,911 · seed 000abc12 · beat my score: https://example.com/thread/?daily=2026-09-17",
+    );
+    expect(line).not.toMatch(/\btime\b/i);
   });
 
   it("falls back to a query hook when the public URL is unknown", () => {
@@ -22,7 +38,7 @@ describe("share line", () => {
       timeMs: 1500,
       seed: 1,
     });
-    expect(line).toContain("Thread Daily 2026-09-17 — 10/0:01 · seed 00000001 · beat my time: ?daily=2026-09-17");
+    expect(line).toContain("Thread Daily 2026-09-17 — 10 · seed 00000001 · beat my score: ?daily=2026-09-17");
   });
 
   it("formats time and seed tags", () => {

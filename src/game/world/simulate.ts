@@ -144,6 +144,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
 
   if (world.course.finishY !== null && world.distance >= world.course.finishY) {
     world.cleared = true;
+    world.alive = false;
     world.distance = world.course.finishY;
     spawnClearParticles(world);
   }
@@ -230,11 +231,11 @@ export function deathPhase(world: World): {
   dissolve: number;
   overlayReady: boolean;
 } {
-  if (world.alive) {
-    return { flash: 0, dissolve: 0, overlayReady: false };
-  }
   if (world.cleared) {
     return { flash: 0, dissolve: 0, overlayReady: true };
+  }
+  if (world.alive) {
+    return { flash: 0, dissolve: 0, overlayReady: false };
   }
   const ms = world.deathAge * 1000;
   const flash = world.reducedMotion

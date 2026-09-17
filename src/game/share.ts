@@ -26,7 +26,8 @@ export function dailyDeepLink(dateKey: string, baseUrl?: string): string {
 
 /**
  * Growth-ready Daily share line.
- * `Thread Daily YYYY-MM-DD — score/time · seed · beat my time: <url-or-hook>`
+ * Clear: `Thread Daily YYYY-MM-DD — score/clear-time · seed · beat my time: <url-or-hook>`
+ * Death (score-based): `Thread Daily YYYY-MM-DD — score · seed · beat my score: <url-or-hook>`
  */
 export function formatDailyShare(opts: {
   dateKey: string;
@@ -34,12 +35,16 @@ export function formatDailyShare(opts: {
   timeMs: number;
   seed: number;
   url?: string;
+  cleared?: boolean;
 }): string {
   const score = Math.floor(opts.score).toLocaleString("en-US");
-  const time = formatRunTime(opts.timeMs);
   const seed = seedTag(opts.seed);
   const url = opts.url && opts.url.length > 0 ? opts.url : "?daily=" + opts.dateKey;
-  return `Thread Daily ${opts.dateKey} — ${score}/${time} · seed ${seed} · beat my time: ${url}`;
+  if (opts.cleared) {
+    const time = formatRunTime(opts.timeMs);
+    return `Thread Daily ${opts.dateKey} — ${score}/${time} · seed ${seed} · beat my time: ${url}`;
+  }
+  return `Thread Daily ${opts.dateKey} — ${score} · seed ${seed} · beat my score: ${url}`;
 }
 
 export function parseDeepLink(search: string): {

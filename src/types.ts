@@ -23,6 +23,12 @@ export type Intent = {
   pointerX: number;
   restart: boolean;
   toTitle: boolean;
+  /** Brake variant: Space / on-screen Brake held. Ignored on control. */
+  brake?: boolean;
+  /** Lanes variant: edge-triggered −1 / +1. Consumed each tick. */
+  laneDelta?: number;
+  /** True when pointer recently steered — Beat Perfect uses the touch window. */
+  touchScoring?: boolean;
 };
 
 export type ObstacleKind = "gate" | "mover";

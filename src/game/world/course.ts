@@ -1,5 +1,6 @@
 import type { CourseSpec, ObstacleSpec, StreamEvent, WallKeyframe } from "../../types.ts";
 import { Rng } from "../rng.ts";
+import type { ExperimentVariant } from "../variant.ts";
 import {
   BASE_SPEED,
   CX,
@@ -10,6 +11,8 @@ import {
   THREAD_RADIUS,
   WALL_MARGIN,
 } from "./constants.ts";
+import { quantizeLipY } from "./beat.ts";
+import { blockPattern, gapFromBlockedLanes } from "./lanes.ts";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -223,6 +226,11 @@ export type CourseOptions = {
   daily: boolean;
   /** When set, skip crypto and build from this seed (Endless tests). */
   endlessHorizon?: number;
+  /**
+   * Beat/lanes replace layout. Control and brake omit this (or pass `control`)
+   * so the control RNG stream and goldens stay untouched.
+   */
+  variant?: ExperimentVariant;
 };
 
 /**
@@ -230,6 +238,8 @@ export type CourseOptions = {
  * Daily finish is a soft landing after the authored first minute.
  */
 export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
+  if (opts.variant === "beat") return generateBeatCourse(seed, opts);
+  if (opts.variant === "lanes") return generateLanesCourse(seed, opts);
   const rng = new Rng(seed);
   const keyframes: WallKeyframe[] = [];
   const obstacles: ObstacleSpec[] = [];
@@ -358,6 +368,288 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
       right: keyframes[keyframes.length - 1]!.right,
       gateId: null,
     });
+  }
+
+  obstacles.sort((a, b) => a.y - b.y || a.id - b.id);
+  keyframes.sort((a, b) => a.y - b.y);
+
+  return {
+    seed: seed >>> 0,
+    daily: opts.daily,
+    finishY,
+    keyframes,
+    obstacles,
+  };
+}
+
+/**
+ * Same weave / agency offsets as control. Only scoring-lip *spacing* snaps to
+ * the metronome grid, with a minimum one-beat gap. Movers stay off-grid.
+ */
+function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
+  const rng = new Rng(seed);
+  const keyframes: WallKeyframe[] = [];
+  const obstacles: ObstacleSpec[] = [];
+  let nextIdNum = 1;
+  const nextId = () => nextIdNum++;
+  let y = -KEYFRAME_PAD;
+  let center = CX;
+  let side: -1 | 1 = 1;
+  let lastLipY = 0;
+
+  const pushRest = (gapMin: number, gapMax: number, wander: number, dy: number) => {
+    y += dy;
+    const placed = placeRest(rng, y, gapMin, gapMax, wander, center);
+    center = placed.center;
+    keyframes.push(placed.kf);
+  };
+
+  const pushGate = (
+    gapMin: number,
+    gapMax: number,
+    minOffset: number,
+    offJitter: number,
+    dy: number,
+  ) => {
+    y = quantizeLipY(y + dy, lastLipY);
+    lastLipY = y;
+    const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId);
+    side = -side as -1 | 1;
+    center = placed.center;
+    keyframes.push(placed.kf);
+    obstacles.push(placed.spec);
+  };
+
+  keyframes.push({
+    y: -KEYFRAME_PAD,
+    left: 40,
+    right: FIELD_W - 40,
+    gateId: null,
+  });
+  while (y < DIST.openEnd) {
+    pushRest(260, 300, 16, rng.float(70, 90));
+  }
+  side = rng.pick([-1, 1] as const);
+
+  while (y < DIST.pinchEnd) {
+    const step = rng.float(105, 125);
+    if (y + step >= DIST.pinchEnd) break;
+    pushGate(118, 142, 52, 14, step);
+  }
+
+  const moverAt = DIST.pinchEnd + rng.float(280, 520);
+  let moverPlaced = false;
+  while (y < DIST.moverEnd) {
+    const step = rng.float(110, 135);
+    if (!moverPlaced && y + step >= moverAt) {
+      const my = moverAt;
+      obstacles.push(placeMover(rng, my, side, nextId));
+      moverPlaced = true;
+      y = my;
+      const around = placeRest(rng, y, 188, 220, 16, center);
+      center = around.center;
+      keyframes.push(around.kf);
+      continue;
+    }
+    if (y + step >= DIST.moverEnd) break;
+    pushGate(110, 136, 58, 12, step);
+  }
+  if (!moverPlaced) {
+    obstacles.push(placeMover(rng, DIST.pinchEnd + 360, side, nextId));
+  }
+  if (y < DIST.moverEnd) {
+    pushRest(188, 220, 16, DIST.moverEnd - y);
+  }
+
+  for (let i = 0; i < 3; i++) {
+    pushGate(96, 118, 64, 10, rng.float(88, 108));
+  }
+  while (y < DIST.rhythmEnd) {
+    pushRest(210, 240, 12, rng.float(90, 120));
+  }
+
+  let finishY: number | null = null;
+  if (opts.daily) {
+    pushRest(210, 240, 12, 90);
+    finishY = DIST.dailyFinish;
+    keyframes.push({
+      y: finishY + KEYFRAME_PAD,
+      left: 48,
+      right: FIELD_W - 48,
+      gateId: null,
+    });
+  } else {
+    const horizon = opts.endlessHorizon ?? DIST.rhythmEnd + 24000;
+    let segment = 0;
+    while (y < horizon) {
+      segment += 1;
+      const knob = (segment - 1) % 3;
+      const tighten = Math.min(36, segment * 3);
+      const gapMin = Math.max(78, 118 - tighten);
+      const gapMax = Math.max(gapMin + 12, 150 - tighten);
+      const minOffset = Math.min(72, 52 + segment * 2);
+      const spacing = knob === 1 ? rng.float(78, 96) : rng.float(96, 124);
+      const end = y + 900;
+      let lastMover = y - 400;
+      while (y < end && y < horizon) {
+        if (knob === 2 && y - lastMover > rng.float(380, 560)) {
+          const my = y + rng.float(40, 80);
+          obstacles.push(placeMover(rng, my, side, nextId));
+          lastMover = my;
+          y = my;
+          const around = placeRest(rng, y, gapMin + 40, gapMax + 50, 16, center);
+          center = around.center;
+          keyframes.push(around.kf);
+          continue;
+        }
+        pushGate(gapMin, gapMax, minOffset, 12, spacing);
+      }
+    }
+    keyframes.push({
+      y: y + KEYFRAME_PAD,
+      left: keyframes[keyframes.length - 1]!.left,
+      right: keyframes[keyframes.length - 1]!.right,
+      gateId: null,
+    });
+  }
+
+  obstacles.sort((a, b) => a.y - b.y || a.id - b.id);
+  keyframes.sort((a, b) => a.y - b.y);
+
+  return {
+    seed: seed >>> 0,
+    daily: opts.daily,
+    finishY,
+    keyframes,
+    obstacles,
+  };
+}
+
+function placeLaneLip(
+  y: number,
+  blocked: number[],
+  nextId: () => number,
+  kind: ObstacleSpec["kind"],
+): ObstacleSpec {
+  const gap = gapFromBlockedLanes(blocked);
+  return {
+    id: nextId(),
+    kind,
+    y,
+    left: gap.left,
+    right: gap.right,
+    thickness: kind === "mover" ? 14 : GATE_LIP_THICKNESS,
+    baseCenter: gap.center,
+    gapWidth: gap.gap,
+    amplitude: 0,
+    period: 1,
+    phase: 0,
+  };
+}
+
+/**
+ * Three-lane filament. Lips occupy 1–2 lanes; ≥1 lane stays open.
+ * Agency is alternating blocked side, not analog CX offset.
+ */
+function generateLanesCourse(seed: number, opts: CourseOptions): CourseSpec {
+  const rng = new Rng(seed);
+  const keyframes: WallKeyframe[] = [];
+  const obstacles: ObstacleSpec[] = [];
+  let nextIdNum = 1;
+  const nextId = () => nextIdNum++;
+  let y = -KEYFRAME_PAD;
+  let side: -1 | 1 = 1;
+
+  const wide = (at: number, gateId: number | null = null): WallKeyframe => ({
+    y: at,
+    left: 8,
+    right: FIELD_W - 8,
+    gateId,
+  });
+
+  const pushLip = (dy: number, twoLane: boolean, kind: ObstacleSpec["kind"] = "gate") => {
+    y += dy;
+    const blocked = blockPattern(side, twoLane);
+    if (kind === "gate") side = -side as -1 | 1;
+    const spec = placeLaneLip(y, blocked, nextId, kind);
+    keyframes.push(wide(y, spec.kind === "gate" ? spec.id : null));
+    obstacles.push(spec);
+  };
+
+  keyframes.push(wide(-KEYFRAME_PAD));
+  while (y < DIST.openEnd) {
+    y += rng.float(70, 90);
+    keyframes.push(wide(y));
+  }
+  side = rng.pick([-1, 1] as const);
+
+  // First pinches: 1-lane blocks (readable), then 2-lane weave so center dies.
+  while (y < DIST.pinchEnd) {
+    const step = rng.float(118, 148);
+    if (y + step >= DIST.pinchEnd) break;
+    pushLip(step, y > DIST.openEnd + 720);
+  }
+
+  const moverAt = DIST.pinchEnd + rng.float(280, 520);
+  let moverPlaced = false;
+  while (y < DIST.moverEnd) {
+    const step = rng.float(120, 150);
+    if (!moverPlaced && y + step >= moverAt) {
+      y = moverAt;
+      const spec = placeLaneLip(y, blockPattern(side, false), nextId, "mover");
+      obstacles.push(spec);
+      keyframes.push(wide(y));
+      moverPlaced = true;
+      continue;
+    }
+    if (y + step >= DIST.moverEnd) break;
+    pushLip(step, true);
+  }
+  if (!moverPlaced) {
+    const spec = placeLaneLip(DIST.pinchEnd + 360, blockPattern(side, false), nextId, "mover");
+    obstacles.push(spec);
+  }
+  if (y < DIST.moverEnd) {
+    y = DIST.moverEnd;
+    keyframes.push(wide(y));
+  }
+
+  for (let i = 0; i < 3; i++) {
+    pushLip(rng.float(96, 120), true);
+  }
+  while (y < DIST.rhythmEnd) {
+    y += rng.float(90, 120);
+    keyframes.push(wide(y));
+  }
+
+  let finishY: number | null = null;
+  if (opts.daily) {
+    y += 90;
+    keyframes.push(wide(y));
+    finishY = DIST.dailyFinish;
+    keyframes.push(wide(finishY + KEYFRAME_PAD));
+  } else {
+    const horizon = opts.endlessHorizon ?? DIST.rhythmEnd + 24000;
+    let segment = 0;
+    while (y < horizon) {
+      segment += 1;
+      const twoLane = true;
+      const spacing = segment >= 4 ? rng.float(78, 100) : rng.float(96, 124);
+      const end = y + 900;
+      let lastMover = y - 400;
+      while (y < end && y < horizon) {
+        if (y - lastMover > rng.float(420, 620)) {
+          y += rng.float(40, 80);
+          const spec = placeLaneLip(y, blockPattern(side, segment >= 3), nextId, "mover");
+          obstacles.push(spec);
+          keyframes.push(wide(y));
+          lastMover = y;
+          continue;
+        }
+        pushLip(spacing, twoLane);
+      }
+    }
+    keyframes.push(wide(y + KEYFRAME_PAD));
   }
 
   obstacles.sort((a, b) => a.y - b.y || a.id - b.id);

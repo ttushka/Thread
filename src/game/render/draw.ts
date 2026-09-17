@@ -10,6 +10,7 @@ import {
   VIEW_AHEAD,
   VIEW_BEHIND,
 } from "../world/constants.ts";
+import { LANE_GUIDES } from "../variant.ts";
 
 const BG_DEEP = "#0B0D10";
 const BG_PANEL = "#12151A";
@@ -17,6 +18,7 @@ const INK = "#E8EAED";
 const THREAD = "#5EEAD4";
 const THREAD_DIM = "#2A6F66";
 const DANGER = "#F07178";
+const INK_MUTED = "#8B919A";
 
 /**
  * WALL-MOVER-POLISH-BRIEF-v1 — palette / stroke / fill / soft depth only.
@@ -89,10 +91,12 @@ export function drawFrame(
     const camera = interpDistance(world, alpha);
     const x = interpX(world, alpha);
     drawTunnel(ctx, world, camera);
+    if (world.variant === "lanes") drawLaneGuides(ctx);
     drawSlabs(ctx, world, camera);
     if (world.course.finishY !== null) drawFinish(ctx, world.course.finishY, camera);
     drawThread(ctx, world, camera, x);
     drawParticles(ctx, world);
+    if (world.variant === "beat") drawBeatPulse(ctx, world);
     const phase = deathPhase(world);
     if (!world.alive && !world.cleared && phase.flash > 0) {
       ctx.fillStyle = rgba(DANGER, 0.22 * phase.flash);
@@ -195,12 +199,13 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
     const bars = slabPair(obs.y, obs.thickness, gap);
     const top = sy - bars.left.h / 2;
     const isGate = obs.kind === "gate";
+    const perfect = world.variant === "beat" && world.perfectFlash > 0 && obs.id === world.lastPerfectId;
     const style = isGate
       ? {
-          fill: WALL_ART.pinchLip,
-          inner: PINCH_LIP_INNER,
-          edge: WALL_ART.pinchLipEdge,
-          lineWidth: WALL_ART.pinchLipStroke,
+          fill: perfect ? INK : WALL_ART.pinchLip,
+          inner: perfect ? INK : PINCH_LIP_INNER,
+          edge: perfect ? INK : WALL_ART.pinchLipEdge,
+          lineWidth: perfect ? WALL_ART.pinchLipStroke + 0.4 : WALL_ART.pinchLipStroke,
         }
       : {
           fill: WALL_ART.mover,
@@ -246,6 +251,25 @@ function drawCraftedBar(
   ctx.lineJoin = "round";
   roundRect(ctx, bar.x, top, bar.w, bar.h, 2);
   ctx.stroke();
+}
+
+function drawLaneGuides(ctx: CanvasRenderingContext2D): void {
+  ctx.strokeStyle = rgba(INK_MUTED, 0.12);
+  ctx.lineWidth = 1;
+  for (const x of LANE_GUIDES) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, FIELD_H);
+    ctx.stroke();
+  }
+}
+
+/** Playfield-edge metronome. Ink-muted only — readable with the click muted. */
+function drawBeatPulse(ctx: CanvasRenderingContext2D, world: World): void {
+  const amp = Math.max(0.16, world.beatPulse);
+  ctx.strokeStyle = rgba(INK_MUTED, 0.2 + 0.55 * world.beatPulse);
+  ctx.lineWidth = 3 + 3 * amp;
+  ctx.strokeRect(4, 4, FIELD_W - 8, FIELD_H - 8);
 }
 
 function drawFinish(ctx: CanvasRenderingContext2D, finishY: number, camera: number): void {

@@ -61,6 +61,7 @@ body {
   inset: 0;
   pointer-events: none;
   padding: max(12px, env(safe-area-inset-top)) 16px 16px;
+  z-index: 2;
 }
 
 .hud-top {
@@ -97,6 +98,30 @@ body {
   color: var(--thread-dim);
 }
 
+.hud-variant {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--obstacle-edge);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.hud-slow {
+  position: absolute;
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 76px));
+  right: max(16px, env(safe-area-inset-right));
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
 .hud-best {
   position: absolute;
   bottom: max(12px, env(safe-area-inset-bottom));
@@ -110,6 +135,7 @@ body {
   place-items: center;
   padding: 24px;
   background: rgba(11, 13, 16, 0.56);
+  z-index: 4;
 }
 
 .overlay.hidden,
@@ -217,6 +243,94 @@ h2 {
 
 .hint {
   margin-top: 0;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--obstacle-edge);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  vertical-align: 3px;
+}
+
+.experiment {
+  margin: 0 0 16px;
+}
+
+.experiment .kicker {
+  margin-bottom: 8px;
+}
+
+.experiment-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  appearance: none;
+  border: 1px solid var(--obstacle-edge);
+  background: var(--bg-raised);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 36px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  border-color: var(--thread-dim);
+  outline: none;
+}
+
+.chip.active {
+  border-color: var(--thread-dim);
+  color: var(--thread);
+}
+
+.brake-btn {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid var(--obstacle-edge);
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 3;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.brake-btn:hover,
+.brake-btn:focus-visible {
+  border-color: var(--thread-dim);
+  outline: none;
+}
+
+.brake-btn.held {
+  border-color: var(--thread);
+  color: var(--thread);
+}
+
+#btn-beat-mute {
+  display: block;
+  margin-top: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

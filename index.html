@@ -21,14 +21,18 @@
           <p id="hud-mode" class="hud-kicker">Endless</p>
           <p id="hud-score" class="hud-score">0</p>
         </div>
+        <p id="hud-variant" class="hud-variant" hidden></p>
         <p id="hud-combo" class="hud-combo" hidden>combo 0</p>
+        <p id="hud-slow" class="hud-slow" hidden>slow</p>
         <p id="hud-best" class="hud-best">best 0</p>
       </div>
+
+      <button type="button" id="btn-brake" class="brake-btn hidden" aria-label="Brake" tabindex="-1">Brake</button>
 
       <div id="title" class="overlay" role="dialog" aria-labelledby="title-heading">
         <div class="panel">
           <p class="kicker">Precision skill</p>
-          <h1 id="title-heading">Thread</h1>
+          <h1 id="title-heading">Thread <span id="title-variant-badge" class="badge hidden"></span></h1>
           <p class="lede">
             Guide a living filament through a narrowing space. Calm control under rising tension.
           </p>
@@ -38,10 +42,23 @@
             <button type="button" id="btn-daily" class="btn btn-primary">Daily Challenge</button>
             <p id="title-daily-meta" class="meta">Resets at 00:00 UTC</p>
           </div>
-          <p class="hint">
+          <div id="experiment" class="experiment">
+            <p class="kicker">Experiment</p>
+            <div class="experiment-row" role="group" aria-label="Experiment variant">
+              <button type="button" class="chip" data-variant="control" id="chip-control">Control</button>
+              <button type="button" class="chip" data-variant="brake" id="chip-brake">Brake</button>
+              <button type="button" class="chip" data-variant="beat" id="chip-beat">Beat</button>
+              <button type="button" class="chip" data-variant="lanes" id="chip-lanes">Lanes</button>
+            </div>
+            <p id="experiment-teach" class="hint">
+              Steer with A/D or arrows. Drag left and right on a phone. Advance is automatic.
+            </p>
+          </div>
+          <p id="title-hint" class="hint hidden">
             Steer with A/D or arrows. Drag left and right on a phone. Advance is automatic.
           </p>
           <button type="button" id="btn-motion" class="text-btn">Motion: full</button>
+          <button type="button" id="btn-beat-mute" class="text-btn hidden">Click: on</button>
         </div>
       </div>
 

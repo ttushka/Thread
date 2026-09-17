@@ -16,6 +16,10 @@ export const DEATH_FREEZE_MS = 200;
 export const DEATH_FLASH_MS = 100;
 export const DEATH_DISSOLVE_MS = 260;
 export const NEAR_MISS_MS = 100;
+/** Clean Pass thread accent. Same family as near-miss; brief 80–120ms. */
+export const CLEAN_PASS_FLASH_MS = 100;
+/** Static scoring-gate lips. Same slab family as movers, thinner, not animated. */
+export const GATE_LIP_THICKNESS = 12;
 export const STEER_SPEED = 280;
 export const POINTER_LERP = 11;
 

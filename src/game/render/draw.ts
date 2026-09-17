@@ -2,7 +2,7 @@ import type { CanvasHandle } from "./canvas.ts";
 import { withPlayfield } from "./canvas.ts";
 import type { World } from "../world/simulate.ts";
 import { deathPhase, interpDistance, interpX } from "../world/simulate.ts";
-import { moverGap, sampleWalls } from "../world/course.ts";
+import { moverGap, sampleWalls, slabPair } from "../world/course.ts";
 import {
   FIELD_H,
   FIELD_W,
@@ -18,7 +18,10 @@ const THREAD = "#5EEAD4";
 const THREAD_DIM = "#2A6F66";
 const OBSTACLE = "#3D4450";
 const OBSTACLE_EDGE = "#5A6270";
+/** Sharper than tunnel stroke so static lips read as a gate, not wall noise. */
+const GATE_LIP_EDGE = "#8A93A3";
 const DANGER = "#F07178";
+const LIP_FACE = 2.5;
 
 function worldToScreen(worldY: number, camera: number): number {
   return THREAD_SCREEN_Y - (worldY - camera);
@@ -47,7 +50,7 @@ export function drawFrame(
     const camera = interpDistance(world, alpha);
     const x = interpX(world, alpha);
     drawTunnel(ctx, world, camera);
-    drawMovers(ctx, world, camera);
+    drawSlabs(ctx, world, camera);
     if (world.course.finishY !== null) drawFinish(ctx, world.course.finishY, camera);
     drawThread(ctx, world, camera, x);
     drawParticles(ctx, world);
@@ -116,23 +119,37 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
   ctx.stroke();
 }
 
-function drawMovers(ctx: CanvasRenderingContext2D, world: World, camera: number): void {
+function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number): void {
   for (const obs of world.obstacles) {
-    if (obs.kind !== "mover") continue;
     const sy = worldToScreen(obs.y, camera);
     if (sy < -40 || sy > FIELD_H + 40) continue;
-    const gap = moverGap(obs, world.time);
-    const h = obs.thickness;
+    const gap = obs.kind === "mover" ? moverGap(obs, world.time) : { left: obs.left, right: obs.right };
+    const bars = slabPair(obs.y, obs.thickness, gap);
+    const top = sy - bars.left.h / 2;
+    const isGate = obs.kind === "gate";
     ctx.fillStyle = OBSTACLE;
-    ctx.strokeStyle = OBSTACLE_EDGE;
-    ctx.lineWidth = 1.2;
-    roundRect(ctx, 0, sy - h / 2, gap.left, h, 2);
+    ctx.strokeStyle = isGate ? GATE_LIP_EDGE : OBSTACLE_EDGE;
+    ctx.lineWidth = isGate ? 1.6 : 1.2;
+    roundRect(ctx, bars.left.x, top, bars.left.w, bars.left.h, 2);
     ctx.fill();
     ctx.stroke();
-    roundRect(ctx, gap.right, sy - h / 2, FIELD_W - gap.right, h, 2);
+    roundRect(ctx, bars.right.x, top, bars.right.w, bars.right.h, 2);
     ctx.fill();
     ctx.stroke();
+    if (isGate) drawGateFaces(ctx, gap, top, bars.left.h);
   }
+}
+
+/** Kill-hazard token on the inner bar face — contact here nicks/kills like a wall. */
+function drawGateFaces(
+  ctx: CanvasRenderingContext2D,
+  gap: { left: number; right: number },
+  top: number,
+  h: number,
+): void {
+  ctx.fillStyle = DANGER;
+  ctx.fillRect(gap.left - LIP_FACE, top, LIP_FACE, h);
+  ctx.fillRect(gap.right, top, LIP_FACE, h);
 }
 
 function drawFinish(ctx: CanvasRenderingContext2D, finishY: number, camera: number): void {

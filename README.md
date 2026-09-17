@@ -11,6 +11,8 @@ No accounts. No ads. No pay-to-win. Play immediately — progress lives in this 
 
 ## Play
 
+External play (GitHub Pages, always valid): **https://ttushka.github.io/Thread/**
+
 ```bash
 npm install
 npm run dev
@@ -36,14 +38,41 @@ GitHub often cannot turn this on from the API. Do it once in the UI:
 
 After that, the `github-pages` environment appears on its own. The site URL is `https://ttushka.github.io/Thread/` (GitHub may redirect `/Thread` → `/Thread/`).
 
+## itch.io (HTML5)
+
+Pages stays the canonical public URL: **https://ttushka.github.io/Thread/**. itch.io is a second host for the same build, played inside their iframe.
+
+```bash
+npm run build:itch
+```
+
+That command:
+
+1. Typechecks, then runs Vite with **`base: "./"`** (relative asset paths — no `/Thread/` prefixes, which 404 in the itch iframe).
+2. Zips the **contents** of `dist/` to `thread-itch.zip` with `index.html` at the ZIP root (not nested in a `dist/` folder).
+
+GitHub Pages keeps using `npm run build` (`base` `/Thread/`, via default / `VITE_BASE`). Daily “Copy challenge” still points at Pages (`VITE_PUBLIC_URL`).
+
+### Upload on itch
+
+1. Create or edit the project → **Kind of project: HTML**.
+2. Upload `thread-itch.zip`.
+3. Check **This file will be played in the browser**.
+4. Embed options → **Embed in page**.
+5. Viewport / embed size: **540 × 960** (portrait). The playfield is 360×640 (9:16) and the canvas fills the iframe; 540×960 is 1.5× that. Landscape **960 × 540** works but letterboxes the playfield.
+6. Optional: mark **Mobile friendly** (touch steer is supported) and keep a fullscreen control if you want.
+
+If the game is a white screen on itch, the ZIP almost always has `index.html` inside a folder, or JS/CSS still request `/Thread/assets/…`. Re-run `npm run build:itch` and upload the new zip.
+
 ## Test & build
 
 ```bash
 npm test
 npm run build
+npm run build:itch
 ```
 
-Static output lands in `dist/` (Vite, no server). Preview with `npm run preview`.
+`npm run build` writes Pages output to `dist/` (Vite, no server). Preview with `npm run preview`. `npm run build:itch` overwrites `dist/` with the relative-base build and writes `thread-itch.zip` at the repo root.
 
 ## Daily Challenge clock
 

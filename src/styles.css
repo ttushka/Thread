@@ -6,8 +6,13 @@
   --ink-muted: #8b919a;
   --thread: #5eead4;
   --thread-dim: #2a6f66;
+  /* WALL-MOVER-POLISH-BRIEF-v1 — canvas copies these hexes in draw.ts */
   --obstacle: #3d4450;
   --obstacle-edge: #5a6270;
+  --pinch-lip: #161a22;
+  --pinch-lip-edge: #b8c0cc;
+  --mover: #242a34;
+  --mover-edge: #a8b0bc;
   --danger: #f07178;
   color-scheme: dark;
 }

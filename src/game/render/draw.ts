@@ -16,12 +16,51 @@ const BG_PANEL = "#12151A";
 const INK = "#E8EAED";
 const THREAD = "#5EEAD4";
 const THREAD_DIM = "#2A6F66";
-const OBSTACLE = "#3D4450";
-const OBSTACLE_EDGE = "#5A6270";
-/** Sharper than tunnel stroke so static lips read as a gate, not wall noise. */
-const GATE_LIP_EDGE = "#8A93A3";
 const DANGER = "#F07178";
-const LIP_FACE = 2.5;
+
+/**
+ * WALL-MOVER-POLISH-BRIEF-v1 — palette / stroke / fill / soft depth only.
+ * Teal stays thread-only. Inner shade is ≤8% toward --bg-deep, not a second hue.
+ */
+export const WALL_ART = {
+  obstacle: "#3D4450",
+  obstacleEdge: "#5A6270",
+  pinchLip: "#161A22",
+  pinchLipEdge: "#B8C0CC",
+  /** Design-locked 2.5–3px; brighter/thicker than the 2px tunnel stroke. */
+  pinchLipStroke: 3,
+  mover: "#242A34",
+  moverEdge: "#A8B0BC",
+  moverStroke: 2,
+  innerShade: 0.08,
+  wallShadePx: 8,
+  slabShadePx: 7,
+  contactShadowBlur: 6,
+  contactShadowAlpha: 0.18,
+} as const;
+
+function parseHex(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixToward(hex: string, toward: string, t: number): string {
+  const a = parseHex(hex);
+  const b = parseHex(toward);
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bch = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | bch).toString(16).slice(1).toUpperCase()}`;
+}
+
+function rgba(hex: string, a: number): string {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+const OBSTACLE_INNER = mixToward(WALL_ART.obstacle, BG_DEEP, WALL_ART.innerShade);
+const PINCH_LIP_INNER = mixToward(WALL_ART.pinchLip, BG_DEEP, WALL_ART.innerShade);
+const MOVER_INNER = mixToward(WALL_ART.mover, BG_DEEP, WALL_ART.innerShade);
 
 function worldToScreen(worldY: number, camera: number): number {
   return THREAD_SCREEN_Y - (worldY - camera);
@@ -94,29 +133,58 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
     right.push({ x: w.right, sy });
   }
 
-  ctx.fillStyle = BG_DEEP;
-  ctx.beginPath();
-  ctx.moveTo(0, worldToScreen(y0, camera));
-  for (const p of left) ctx.lineTo(p.x, p.sy);
-  ctx.lineTo(0, worldToScreen(y1, camera));
-  ctx.closePath();
-  ctx.fill();
+  const y0s = worldToScreen(y0, camera);
+  const y1s = worldToScreen(y1, camera);
+  fillWallSlab(ctx, "left", left, y0s, y1s);
+  fillWallSlab(ctx, "right", right, y0s, y1s);
 
-  ctx.beginPath();
-  ctx.moveTo(FIELD_W, worldToScreen(y0, camera));
-  for (const p of right) ctx.lineTo(p.x, p.sy);
-  ctx.lineTo(FIELD_W, worldToScreen(y1, camera));
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = OBSTACLE_EDGE;
+  ctx.strokeStyle = WALL_ART.obstacleEdge;
   ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
   ctx.beginPath();
   left.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
   ctx.stroke();
   ctx.beginPath();
   right.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
   ctx.stroke();
+}
+
+/** Corridor mass: fill + inner-face shade (≤8% toward bg-deep). No gloss/noise. */
+function fillWallSlab(
+  ctx: CanvasRenderingContext2D,
+  side: "left" | "right",
+  edge: { x: number; sy: number }[],
+  y0s: number,
+  y1s: number,
+): void {
+  const inset = WALL_ART.wallShadePx;
+  ctx.fillStyle = OBSTACLE_INNER;
+  wallPath(ctx, side, edge, y0s, y1s, 0);
+  ctx.fill();
+  ctx.fillStyle = WALL_ART.obstacle;
+  wallPath(ctx, side, edge, y0s, y1s, inset);
+  ctx.fill();
+}
+
+function wallPath(
+  ctx: CanvasRenderingContext2D,
+  side: "left" | "right",
+  edge: { x: number; sy: number }[],
+  y0s: number,
+  y1s: number,
+  inset: number,
+): void {
+  ctx.beginPath();
+  if (side === "left") {
+    ctx.moveTo(0, y0s);
+    for (const p of edge) ctx.lineTo(p.x - inset, p.sy);
+    ctx.lineTo(0, y1s);
+  } else {
+    ctx.moveTo(FIELD_W, y0s);
+    for (const p of edge) ctx.lineTo(p.x + inset, p.sy);
+    ctx.lineTo(FIELD_W, y1s);
+  }
+  ctx.closePath();
 }
 
 function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number): void {
@@ -127,29 +195,57 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
     const bars = slabPair(obs.y, obs.thickness, gap);
     const top = sy - bars.left.h / 2;
     const isGate = obs.kind === "gate";
-    ctx.fillStyle = OBSTACLE;
-    ctx.strokeStyle = isGate ? GATE_LIP_EDGE : OBSTACLE_EDGE;
-    ctx.lineWidth = isGate ? 1.6 : 1.2;
-    roundRect(ctx, bars.left.x, top, bars.left.w, bars.left.h, 2);
-    ctx.fill();
-    ctx.stroke();
-    roundRect(ctx, bars.right.x, top, bars.right.w, bars.right.h, 2);
-    ctx.fill();
-    ctx.stroke();
-    if (isGate) drawGateFaces(ctx, gap, top, bars.left.h);
+    const style = isGate
+      ? {
+          fill: WALL_ART.pinchLip,
+          inner: PINCH_LIP_INNER,
+          edge: WALL_ART.pinchLipEdge,
+          lineWidth: WALL_ART.pinchLipStroke,
+        }
+      : {
+          fill: WALL_ART.mover,
+          inner: MOVER_INNER,
+          edge: WALL_ART.moverEdge,
+          lineWidth: WALL_ART.moverStroke,
+        };
+    drawCraftedBar(ctx, bars.left, top, style, "left");
+    drawCraftedBar(ctx, bars.right, top, style, "right");
   }
 }
 
-/** Kill-hazard token on the inner bar face — contact here nicks/kills like a wall. */
-function drawGateFaces(
+function drawCraftedBar(
   ctx: CanvasRenderingContext2D,
-  gap: { left: number; right: number },
+  bar: { x: number; w: number; h: number },
   top: number,
-  h: number,
+  style: { fill: string; inner: string; edge: string; lineWidth: number },
+  facing: "left" | "right",
 ): void {
-  ctx.fillStyle = DANGER;
-  ctx.fillRect(gap.left - LIP_FACE, top, LIP_FACE, h);
-  ctx.fillRect(gap.right, top, LIP_FACE, h);
+  if (bar.w <= 0 || bar.h <= 0) return;
+
+  ctx.save();
+  ctx.shadowColor = rgba(BG_DEEP, WALL_ART.contactShadowAlpha);
+  ctx.shadowBlur = WALL_ART.contactShadowBlur;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = style.fill;
+  roundRect(ctx, bar.x, top, bar.w, bar.h, 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  roundRect(ctx, bar.x, top, bar.w, bar.h, 2);
+  ctx.clip();
+  ctx.fillStyle = style.inner;
+  const shade = Math.min(WALL_ART.slabShadePx, bar.w);
+  if (facing === "left") ctx.fillRect(bar.x + bar.w - shade, top, shade, bar.h);
+  else ctx.fillRect(bar.x, top, shade, bar.h);
+  ctx.restore();
+
+  ctx.strokeStyle = style.edge;
+  ctx.lineWidth = style.lineWidth;
+  ctx.lineJoin = "round";
+  roundRect(ctx, bar.x, top, bar.w, bar.h, 2);
+  ctx.stroke();
 }
 
 function drawFinish(ctx: CanvasRenderingContext2D, finishY: number, camera: number): void {
@@ -252,12 +348,4 @@ function roundRect(
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
-}
-
-function rgba(hex: string, a: number): string {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  return `rgba(${r},${g},${b},${a})`;
 }

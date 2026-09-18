@@ -125,6 +125,44 @@ function placeScoringGate(
 const MOVER_THICKNESS = 14;
 const MOVER_UNSAFE_MIN = 0.35;
 const PHASE_STEPS = 96;
+/** Same telegraph floor as the agency brief: no snap-shut inside this window. */
+export const MOVER_SNAP_TELEGRAPH = 0.6;
+const OPEN_WINDOW_DT = 1 / 180;
+
+/** First slab overlap — arrival, matching `hitObstacle` y-range. */
+export function moverContactTime(spec: ObstacleSpec): number {
+  return Math.max(0, (spec.y - spec.thickness / 2) / BASE_SPEED);
+}
+
+/** Thread radius fits inside the moving gap at `simTime` (not a death). */
+export function cxFitsMoverGap(spec: ObstacleSpec, simTime: number, threadX = CX): boolean {
+  const gap = moverGap(spec, simTime);
+  return threadX >= gap.left + THREAD_RADIUS && threadX <= gap.right - THREAD_RADIUS;
+}
+
+/** Snap-shut: CX still fits at tContact−0.6s but not at arrival. */
+export function isMoverSnapPhase(spec: ObstacleSpec, threadX = CX): boolean {
+  const tContact = moverContactTime(spec);
+  const early = cxFitsMoverGap(spec, tContact - MOVER_SNAP_TELEGRAPH, threadX);
+  const atContact = cxFitsMoverGap(spec, tContact, threadX);
+  return early && !atContact;
+}
+
+/** Continuous CX-open duration that includes tContact; 0 if closed on arrival. */
+export function cxOpenWindowAtContact(spec: ObstacleSpec, threadX = CX): number {
+  const tContact = moverContactTime(spec);
+  if (!cxFitsMoverGap(spec, tContact, threadX)) return 0;
+  const limit = Math.max(spec.period, MOVER_SNAP_TELEGRAPH);
+  let back = 0;
+  let fwd = 0;
+  while (back + OPEN_WINDOW_DT <= limit && cxFitsMoverGap(spec, tContact - back - OPEN_WINDOW_DT, threadX)) {
+    back += OPEN_WINDOW_DT;
+  }
+  while (fwd + OPEN_WINDOW_DT <= limit && cxFitsMoverGap(spec, tContact + fwd + OPEN_WINDOW_DT, threadX)) {
+    fwd += OPEN_WINDOW_DT;
+  }
+  return back + fwd;
+}
 
 /** Seconds in the telegraph window around contact where CX is outside the moving gap. */
 export function moverUnsafeDuration(spec: ObstacleSpec, threadX = CX): number {
@@ -144,35 +182,46 @@ export function moverUnsafeDuration(spec: ObstacleSpec, threadX = CX): number {
   return unsafe;
 }
 
-function moverSlabKillsCenter(spec: ObstacleSpec, threadX = CX): boolean {
-  const half = spec.thickness / 2;
-  const t0 = Math.max(0, (spec.y - half) / BASE_SPEED);
-  const t1 = (spec.y + half) / BASE_SPEED;
-  const samples = 24;
-  const dt = (t1 - t0) / samples;
-  for (let i = 0; i < samples; i++) {
-    const t = t0 + (i + 0.5) * dt;
-    const gap = moverGap(spec, t);
-    if (threadX >= gap.left + THREAD_RADIUS && threadX <= gap.right - THREAD_RADIUS) {
-      return false;
-    }
-  }
-  return true;
+export type MoverPhaseSearch = {
+  phase: number;
+  unsafe: number;
+  kills: boolean;
+  telegraphedPunish: boolean;
+  snap: boolean;
+  openWindow: number;
+};
+
+function rankMoverPhase(a: MoverPhaseSearch, b: MoverPhaseSearch): boolean {
+  if (a.snap !== b.snap) return !a.snap;
+  if (a.telegraphedPunish !== b.telegraphedPunish) return a.telegraphedPunish;
+  if (a.telegraphedPunish) return a.unsafe > b.unsafe;
+  return a.openWindow > b.openWindow;
 }
 
-function searchMoverPhase(base: ObstacleSpec): { phase: number; unsafe: number; kills: boolean } {
-  let best = { phase: 0, unsafe: -1, kills: false };
+function evaluateMoverPhase(spec: ObstacleSpec): MoverPhaseSearch {
+  const tContact = moverContactTime(spec);
+  const safeEarly = cxFitsMoverGap(spec, tContact - MOVER_SNAP_TELEGRAPH);
+  const safeContact = cxFitsMoverGap(spec, tContact);
+  const snap = safeEarly && !safeContact;
+  const kills = !safeContact;
+  const unsafe = moverUnsafeDuration(spec);
+  const telegraphedPunish = !snap && kills && unsafe >= MOVER_UNSAFE_MIN;
+  const openWindow = safeContact ? cxOpenWindowAtContact(spec) : 0;
+  return { phase: spec.phase, unsafe, kills, telegraphedPunish, snap, openWindow };
+}
+
+/**
+ * Phase search: reject snap-shut, prefer a telegraphed center close, else the
+ * longest CX-open window through contact. Geometry (speed/gap) is unchanged.
+ */
+export function searchMoverPhase(base: ObstacleSpec): MoverPhaseSearch {
+  let best: MoverPhaseSearch | null = null;
   for (let i = 0; i < PHASE_STEPS; i++) {
     const phase = (i / PHASE_STEPS) * Math.PI * 2;
-    const spec = { ...base, phase };
-    const kills = moverSlabKillsCenter(spec);
-    const unsafe = moverUnsafeDuration(spec);
-    const better =
-      (kills && !best.kills) ||
-      (kills === best.kills && unsafe > best.unsafe);
-    if (better) best = { phase, unsafe, kills };
+    const cand = evaluateMoverPhase({ ...base, phase });
+    if (!best || rankMoverPhase(cand, best)) best = cand;
   }
-  return best;
+  return best!;
 }
 
 function placeMover(rng: Rng, y: number, side: number, nextId: () => number): ObstacleSpec {
@@ -215,7 +264,7 @@ function placeMover(rng: Rng, y: number, side: number, nextId: () => number): Ob
     }
     const found = searchMoverPhase(spec);
     spec.phase = found.phase;
-    if (found.kills && found.unsafe >= MOVER_UNSAFE_MIN) return spec;
+    if (found.telegraphedPunish) return spec;
   }
   const found = searchMoverPhase(spec);
   spec.phase = found.phase;
@@ -291,7 +340,7 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
     pushGate(118, 142, 52, 14, step);
   }
 
-  // 20–40s: readable pinches + one telegraphing mover that punishes static center.
+  // 20–40s: readable pinches + one mover. Center punish only if already closed at −0.6s.
   const moverAt = DIST.pinchEnd + rng.float(280, 520);
   let moverPlaced = false;
   while (y < DIST.moverEnd) {

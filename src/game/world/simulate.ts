@@ -10,6 +10,7 @@ import {
   BEAT_STREAK_CAP,
   beatIntensityFromStreak,
   beatSkimParticleCount,
+  beatSkimScale,
 } from "../variant.ts";
 import { isPerfectTiming, isSkimTiming, nearestBeatIndex, beatPulseAmp } from "./beat.ts";
 import {
@@ -458,9 +459,10 @@ function pulseNearMiss(world: World): void {
 function spawnNearMissParticles(world: World): void {
   const heat = world.variant === "beat" ? world.beatHeat : 0;
   const count = beatSkimParticleCount(heat);
+  const scale = beatSkimScale(heat);
   for (let i = 0; i < count; i++) {
     const ang = (Math.PI * 2 * i) / count + 0.15;
-    const sp = 18 + (i % 2) * 10 + 10 * heat;
+    const sp = (18 + (i % 2) * 10) * scale;
     world.particles.push({
       x: world.x,
       y: 0,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Intent, ObstacleSpec } from "../../types.ts";
 import { CLEAN_AWARD, cleanPassAward } from "../score.ts";
-import { BEAT_SKIM_MS, beatIntensityFromStreak, beatSkimParticleCount } from "../variant.ts";
+import { BEAT_SKIM_MS, BEAT_PULSE_SCALE_MAX, beatIntensityFromStreak, beatSkimParticleCount, beatSkimScale } from "../variant.ts";
 import {
   BASE_SPEED,
   DIST,
@@ -98,6 +98,22 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.beatStreak).toBe(1);
     expect(world.beatHeat).toBeCloseTo(beatIntensityFromStreak(1), 8);
     expect(msToNearestBeat(world.time)).toBeLessThanOrEqual(BEAT_SKIM_MS);
+    expect(world.reducedMotion).toBe(true);
+    expect(world.particles).toHaveLength(0);
+  });
+
+  it("credits under reduced-motion and still breaks on nick", () => {
+    const world = skimWall("beat", 0);
+    expect(world.reducedMotion).toBe(true);
+    expect(world.beatStreak).toBe(1);
+    expect(world.particles).toHaveLength(0);
+
+    world.x = 108;
+    world.prevX = 108;
+    updateWorld(world, hold(108), TICK);
+    expect(world.alive).toBe(true);
+    expect(world.nickTimer).toBeGreaterThan(0);
+    expect(world.beatStreak).toBe(0);
   });
 
   it("ignores a second near-miss on the same beat index", () => {
@@ -170,6 +186,11 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(hot.particles).toHaveLength(beatSkimParticleCount(1));
     expect(hot.particles.filter((p) => p.ink).length).toBe(4);
     expect(hot.particles.filter((p) => !p.ink).length).toBe(4);
+    expect(hot.particles.some((p) => Math.hypot(p.vx, p.vy) > 18)).toBe(true);
+    const hotSp = Math.max(...hot.particles.map((p) => Math.hypot(p.vx, p.vy)));
+    const coldSp = Math.max(...cold.particles.map((p) => Math.hypot(p.vx, p.vy)));
+    expect(hotSp / coldSp).toBeCloseTo(beatSkimScale(1), 8);
+    expect(hotSp / coldSp).toBeLessThanOrEqual(BEAT_PULSE_SCALE_MAX + 1e-9);
     expect(hot.distance).toBeCloseTo(cold.distance, 8);
     expect(hot.x).toBeCloseTo(cold.x, 8);
 

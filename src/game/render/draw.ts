@@ -10,7 +10,7 @@ import {
   VIEW_AHEAD,
   VIEW_BEHIND,
 } from "../world/constants.ts";
-import { LANE_GUIDES, BEAT_PULSE_SCALE_MAX, BEAT_GLOW_BLUR_MAX } from "../variant.ts";
+import { LANE_GUIDES, BEAT_PULSE_SCALE_MAX, BEAT_GLOW_BLUR_MAX, beatSkimScale } from "../variant.ts";
 
 const BG_DEEP = "#0B0D10";
 const BG_PANEL = "#12151A";
@@ -311,6 +311,7 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   const bright = world.nearMissTimer > 0 && world.alive;
   const charged = world.tension > 0 && world.alive;
   const juice = bright && world.variant === "beat" && !world.reducedMotion ? world.beatHeat : 0;
+  const scale = beatSkimScale(juice);
   ctx.globalAlpha = 1 - dissolve;
 
   ctx.beginPath();
@@ -329,20 +330,20 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.shadowColor = juice > 0.5 ? INK : THREAD;
-  ctx.shadowBlur = bright ? 22 + 18 * juice : charged ? 16 : 12;
+  ctx.shadowColor = THREAD;
+  ctx.shadowBlur = bright ? 22 * scale : charged ? 16 : 12;
   ctx.strokeStyle = THREAD_DIM;
-  ctx.lineWidth = bright ? 9.5 + 2.5 * juice : 8;
+  ctx.lineWidth = bright ? 9.5 * scale : 8;
   ctx.stroke();
   ctx.strokeStyle = bright ? INK : THREAD;
-  ctx.lineWidth = bright ? 4.2 + 1.2 * juice : 3.4;
+  ctx.lineWidth = bright ? 4.2 * scale : 3.4;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   const headSy = THREAD_SCREEN_Y;
   ctx.fillStyle = bright ? INK : THREAD;
   ctx.beginPath();
-  ctx.arc(x, headSy, bright ? 4.2 + 1.4 * juice : 3.2, 0, Math.PI * 2);
+  ctx.arc(x, headSy, bright ? 4.2 * scale : 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }

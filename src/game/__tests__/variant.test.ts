@@ -15,6 +15,7 @@ import {
   beatIntensityFromStreak,
   beatBedGain,
   beatSkimParticleCount,
+  beatSkimScale,
 } from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
@@ -109,6 +110,9 @@ describe("BEAT-SKIM-MASTERY-v1 tokens", () => {
     expect(beatSkimParticleCount(0)).toBe(4);
     expect(beatSkimParticleCount(0.5)).toBe(6);
     expect(beatSkimParticleCount(1)).toBe(8);
+    expect(beatSkimScale(0)).toBe(1);
+    expect(beatSkimScale(1)).toBe(BEAT_PULSE_SCALE_MAX);
+    expect(beatSkimScale(1)).toBeLessThanOrEqual(1.18);
   });
 });
 

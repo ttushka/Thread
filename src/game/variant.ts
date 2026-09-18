@@ -42,10 +42,18 @@ export function beatBedGain(base: number, intensity: number): number {
   return base * 10 ** ((BEAT_BED_BOOST_DB * i) / 20);
 }
 
+function clampHeat(heat: number): number {
+  return Math.min(1, Math.max(0, Number.isFinite(heat) ? heat : 0));
+}
+
 /** Near-miss spark count. Extra sparks are ink; base stays teal. */
 export function beatSkimParticleCount(heat: number): number {
-  const i = Math.min(1, Math.max(0, Number.isFinite(heat) ? heat : 0));
-  return BEAT_SKIM_PARTICLE_BASE + Math.round(BEAT_SKIM_PARTICLE_EXTRA * i);
+  return BEAT_SKIM_PARTICLE_BASE + Math.round(BEAT_SKIM_PARTICLE_EXTRA * clampHeat(heat));
+}
+
+/** Visual skim scale — same near-miss family, intensity cap from pulse ≤1.18. */
+export function beatSkimScale(heat: number): number {
+  return 1 + (BEAT_PULSE_SCALE_MAX - 1) * clampHeat(heat);
 }
 
 export const LANE_X = [90, 180, 270] as const;

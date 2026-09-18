@@ -17,6 +17,10 @@ import {
   NICK_MS,
   NICK_SLOW,
   POINTER_LERP,
+  STEER_KEY_ACCEL,
+  STEER_KEY_DECEL,
+  STEER_KEY_TAP_CAP,
+  STEER_KEY_TAP_MS,
   STEER_SPEED,
   TENSION_CAP,
   TENSION_GAIN_LOCK_MS,
@@ -35,6 +39,10 @@ export type World = {
   prevDistance: number;
   x: number;
   prevX: number;
+  /** Keyboard analog steer in [-1, 1]. Unused while pointer/lanes. */
+  steerSmooth: number;
+  /** Seconds into the current non-zero key press. 0 when released. */
+  steerKeyAge: number;
   alive: boolean;
   cleared: boolean;
   nickTimer: number;
@@ -85,6 +93,54 @@ type ObstacleRuntime = ObstacleSpec & {
 
 function damp(current: number, target: number, lambda: number, dt: number): number {
   return current + (target - current) * (1 - Math.exp(-lambda * dt));
+}
+
+function approach(current: number, target: number, rate: number, dt: number): number {
+  if (dt <= 0) return current;
+  const delta = target - current;
+  const step = rate * dt;
+  if (Math.abs(delta) <= step) return target;
+  return current + Math.sign(delta) * step;
+}
+
+/** KEYBOARD-STEER-FINE-v1: ramp digital ±1 intent toward analog steerSmooth. */
+export function stepSteerSmooth(
+  steerSmooth: number,
+  steerKeyAge: number,
+  intentSteer: number,
+  dt: number,
+): { steerSmooth: number; steerKeyAge: number } {
+  const target = Math.max(-1, Math.min(1, intentSteer));
+  const dir = Math.sign(target);
+  if (dir === 0) {
+    return {
+      steerSmooth: approach(steerSmooth, 0, STEER_KEY_DECEL, dt),
+      steerKeyAge: 0,
+    };
+  }
+  const reversing = steerSmooth !== 0 && Math.sign(steerSmooth) !== dir;
+  const age = reversing || steerKeyAge <= 0 ? dt : steerKeyAge + dt;
+  let next = approach(steerSmooth, target, STEER_KEY_ACCEL, dt);
+  if (age < STEER_KEY_TAP_MS / 1000) {
+    if (dir > 0) next = Math.min(next, STEER_KEY_TAP_CAP);
+    else next = Math.max(next, -STEER_KEY_TAP_CAP);
+  }
+  return {
+    steerSmooth: Math.max(-1, Math.min(1, next)),
+    steerKeyAge: age,
+  };
+}
+
+function applyKeyboardSteer(world: World, intent: Intent, dt: number): void {
+  const next = stepSteerSmooth(world.steerSmooth, world.steerKeyAge, intent.steer, dt);
+  world.steerSmooth = next.steerSmooth;
+  world.steerKeyAge = next.steerKeyAge;
+  world.x += world.steerSmooth * STEER_SPEED * dt;
+}
+
+function clearKeyboardSteer(world: World): void {
+  world.steerSmooth = 0;
+  world.steerKeyAge = 0;
 }
 
 function applyLaneSteer(world: World, intent: Intent, dt: number): void {
@@ -151,6 +207,8 @@ export function createWorld(
     prevDistance: 0,
     x,
     prevX: x,
+    steerSmooth: 0,
+    steerKeyAge: 0,
     alive: true,
     cleared: false,
     nickTimer: 0,
@@ -223,11 +281,13 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
 
   if (world.variant === "lanes") {
     applyLaneSteer(world, intent, dt);
+    clearKeyboardSteer(world);
   } else if (intent.pointerActive) {
     const clamped = Math.max(THREAD_RADIUS, Math.min(FIELD_W - THREAD_RADIUS, intent.pointerX));
     world.x = damp(world.x, clamped, POINTER_LERP, dt);
+    clearKeyboardSteer(world);
   } else {
-    world.x += intent.steer * STEER_SPEED * dt;
+    applyKeyboardSteer(world, intent, dt);
   }
   world.x = Math.max(THREAD_RADIUS, Math.min(FIELD_W - THREAD_RADIUS, world.x));
 

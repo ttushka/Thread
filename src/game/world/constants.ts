@@ -27,6 +27,12 @@ export const CLEAN_PASS_FLASH_MS = 120;
 export const GATE_LIP_THICKNESS = 12;
 export const STEER_SPEED = 280;
 export const POINTER_LERP = 11;
+/** KEYBOARD-STEER-FINE-v1: analog ramp on A/D (units of steerSmooth per second). */
+export const STEER_KEY_ACCEL = 3.2;
+export const STEER_KEY_DECEL = 6.0;
+/** First 80ms of a new press cannot exceed this |steerSmooth|. */
+export const STEER_KEY_TAP_MS = 80;
+export const STEER_KEY_TAP_CAP = 0.35;
 
 export const WALL_MARGIN = 14;
 export const KEYFRAME_PAD = 80;

@@ -26,7 +26,7 @@ Daily Challenge deep link: `/Thread/?daily=YYYY-MM-DD` locally, or `https://ttus
 
 Playable build: **https://ttushka.github.io/Thread/**
 
-Pushes to `main` (and manual **Actions → pages → Run workflow**) run `npm ci && npm run build` and publish `dist/` with GitHub Actions. Vite `base` is `/Thread/` so JS/CSS/favicon resolve on that project URL, including `?daily=` share links. Production builds set `VITE_PUBLIC_URL=https://ttushka.github.io/Thread` so Daily “Copy challenge” lines point at Pages rather than `localhost`.
+Pushes to `main` (and manual **Actions → pages → Run workflow**) run `npm ci && npm run build` and publish `dist/` with GitHub Actions. Vite `base` is `/Thread/` so JS/CSS/favicon resolve on that project URL, including `?daily=` share links. Production builds set `VITE_PUBLIC_URL=https://ttushka.github.io/Thread` so Daily “Copy invite” lines point at Pages rather than `localhost`.
 
 ### First-time enablement
 
@@ -51,7 +51,7 @@ That command:
 1. Typechecks, then runs Vite with **`base: "./"`** (relative asset paths — no `/Thread/` prefixes, which 404 in the itch iframe).
 2. Zips the **contents** of `dist/` to `thread-itch.zip` with `index.html` at the ZIP root (not nested in a `dist/` folder).
 
-GitHub Pages keeps using `npm run build` (`base` `/Thread/`, via default / `VITE_BASE`). Daily “Copy challenge” still points at Pages (`VITE_PUBLIC_URL`).
+GitHub Pages keeps using `npm run build` (`base` `/Thread/`, via default / `VITE_BASE`). Daily “Copy invite” still points at Pages (`VITE_PUBLIC_URL`).
 
 ### Upload on itch
 

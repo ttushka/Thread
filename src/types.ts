@@ -23,7 +23,7 @@ export type ThreadSaveV1 = {
 };
 
 export type Intent = {
-  /** Keyboard steer in [-1, 1]. Ignored while a pointer is dragging. */
+  /** Keyboard steer intent in [-1, 1]. Sim ramps via steerSmooth. Ignored while a pointer is dragging. */
   steer: number;
   pointerActive: boolean;
   /** Pointer X in playfield coordinates. */

@@ -6,6 +6,7 @@ import { mountCanvas } from "./game/render/canvas.ts";
 import { drawFrame } from "./game/render/draw.ts";
 import { parseDeepLink } from "./game/share.ts";
 import { utcDateKey } from "./game/seed.ts";
+import { debugPlayDaysEnabled } from "./game/playDays.ts";
 import { playBeatClick } from "./game/beatClick.ts";
 import {
   parseVariant,
@@ -59,6 +60,10 @@ const btnSound = must<HTMLButtonElement>("#btn-sound");
 const btnHudSound = must<HTMLButtonElement>("#btn-hud-sound");
 const btnBeatMute = must<HTMLButtonElement>("#btn-beat-mute");
 const btnBrake = must<HTMLButtonElement>("#btn-brake");
+const titleRecurrence = must("#title-recurrence");
+const resultRecurrence = must("#result-recurrence");
+const debugPlayDays = must("#debug-play-days");
+const showPlayDaysDebug = debugPlayDaysEnabled(window.location.search);
 
 const view = mountCanvas(canvas);
 const game = new Game(window.localStorage);
@@ -382,6 +387,18 @@ function paintChrome(force = false): void {
     }
     const best = snap.mode === "daily" ? snap.dailyBest : snap.endlessBest;
     hudBest.textContent = best > 0 ? `best ${best.toLocaleString("en-US")}` : "";
+  }
+
+  const streak = snap.recurrentCandidate && snap.recurrenceLine ? snap.recurrenceLine : "";
+  titleRecurrence.classList.toggle("hidden", !streak);
+  resultRecurrence.classList.toggle("hidden", !onResult || !streak);
+  if (streak) {
+    titleRecurrence.textContent = streak;
+    resultRecurrence.textContent = streak;
+  }
+  debugPlayDays.classList.toggle("hidden", !showPlayDaysDebug || !onTitle);
+  if (showPlayDaysDebug) {
+    debugPlayDays.textContent = `playDays ${snap.playDaysCount}`;
   }
 
   if (onResult) {

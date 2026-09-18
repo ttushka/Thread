@@ -22,6 +22,14 @@ import { utcDateKey } from "./seed.ts";
 import { formatDailyShare, dailyDeepLink } from "./share.ts";
 import { VARIANT_LABEL, VARIANT_TEACH, inRunTeachOpacity, brakeSkimTeachOpacity, BRAKE_SKIM_TEACH, type ExperimentVariant } from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
+import {
+  RECURRENCE_LINE,
+  isRecurrentCandidate,
+  loadPlayDays,
+  localDateKey,
+  recordPlayDay,
+  uniqueDaysInLast7,
+} from "./playDays.ts";
 
 export type GameSnapshot = {
   screen: Screen;
@@ -50,6 +58,9 @@ export type GameSnapshot = {
   teachOpacity: number;
   braking: boolean;
   beatMuted: boolean;
+  recurrentCandidate: boolean;
+  playDaysCount: number;
+  recurrenceLine: string | null;
 };
 
 export class Game {
@@ -70,6 +81,8 @@ export class Game {
   /** Age in seconds while Brake skim teach is showing; `done` until the next run. */
   private brakeSkimTeach: { age: number } | "done" | null = null;
   private brakeSkimTeachSeen = false;
+  private playDays: string[] = [];
+  private playDayNoted = false;
 
   constructor(storage: StorageLike | null, opts?: { endlessSeed?: number; variant?: ExperimentVariant }) {
     this.storage = storage;
@@ -77,6 +90,7 @@ export class Game {
     this.injectedEndless = opts?.endlessSeed;
     if (opts?.variant) this.variant = opts.variant;
     this.brakeSkimTeachSeen = brakeSkimTeachSeen(storage);
+    this.playDays = loadPlayDays(storage);
   }
 
   setVariant(variant: ExperimentVariant): void {
@@ -153,16 +167,27 @@ export class Game {
     this.ended = false;
     this.restartQueued = false;
     this.brakeSkimTeach = null;
+    this.playDayNoted = false;
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
       reducedMotion: Boolean(this.save.settings?.reducedMotion),
       variant: this.variant,
     });
     this.screen = "play";
+    this.notePlayDay();
+  }
+
+  private notePlayDay(): void {
+    this.playDays = recordPlayDay(this.storage, localDateKey());
+    this.playDayNoted = true;
   }
 
   tick(intent: Intent, dt: number): void {
     if (this.screen === "title") return;
+
+    if (this.screen === "play" && !this.playDayNoted && hasPlayInput(intent)) {
+      this.notePlayDay();
+    }
 
     if (this.world && (this.screen === "play" || this.screen === "dead" || this.screen === "cleared")) {
       updateWorld(this.world, this.screen === "play" ? intent : idleIntent(), dt);
@@ -255,6 +280,9 @@ export class Game {
       teachOpacity = 0;
     }
 
+    const todayLocal = localDateKey();
+    const recurrentCandidate = isRecurrentCandidate(this.playDays, todayLocal);
+
     return {
       screen: this.screen,
       mode: this.mode,
@@ -282,6 +310,9 @@ export class Game {
       teachOpacity,
       braking: Boolean(world?.braking),
       beatMuted: this.beatMuted,
+      recurrentCandidate,
+      playDaysCount: uniqueDaysInLast7(this.playDays, todayLocal),
+      recurrenceLine: recurrentCandidate ? RECURRENCE_LINE : null,
     };
   }
 }
@@ -297,6 +328,15 @@ function idleIntent(): Intent {
     laneDelta: 0,
     touchScoring: false,
   };
+}
+
+function hasPlayInput(intent: Intent): boolean {
+  return (
+    intent.pointerActive ||
+    intent.steer !== 0 ||
+    Boolean(intent.brake) ||
+    Boolean(intent.laneDelta)
+  );
 }
 
 function publicBaseUrl(): string | undefined {

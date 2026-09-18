@@ -8,6 +8,8 @@ import {
   recordDailyRun,
   recordEndlessBest,
   type StorageLike,
+  withBrakeHudPos,
+  brakeHudPos,
   withMuted,
   withReducedMotion,
   writeSave,
@@ -93,6 +95,15 @@ export class Game {
   toggleMuted(): void {
     const next = !this.save.settings?.muted;
     this.save = withMuted(this.save, next);
+    writeSave(this.storage, this.save);
+  }
+
+  brakeHudPos(): { x: number; y: number } | null {
+    return brakeHudPos(this.save);
+  }
+
+  setBrakeHudPos(pos: { x: number; y: number } | null): void {
+    this.save = withBrakeHudPos(this.save, pos);
     writeSave(this.storage, this.save);
   }
 

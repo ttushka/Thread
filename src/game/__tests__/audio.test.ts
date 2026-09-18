@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAudioBed, type AudioContextLike } from "../audio.ts";
+import { beatBedGain } from "../variant.ts";
 
 type GainFake = {
   gain: {
@@ -107,6 +108,31 @@ describe("audio bed", () => {
       bed.leaveRun();
       bed.setMuted(true);
     }).not.toThrow();
+    expect(bed.isMuted()).toBe(true);
+  });
+
+  it("swells bed gain with beat intensity and still respects mute", () => {
+    const gains: GainFake[] = [];
+    const { ctx } = fakeContext();
+    ctx.createGain = () => {
+      const g = fakeGain();
+      gains.push(g);
+      return g;
+    };
+    const bed = createAudioBed({ context: ctx, fetch: failFetch(), baseUrl: "/" });
+    bed.unlock();
+    expect(gains.length).toBeGreaterThanOrEqual(3);
+    const music = gains[1]!;
+    bed.setBeatIntensity(1);
+    const boosted = beatBedGain(0.42, 1);
+    expect(boosted / 0.42).toBeLessThanOrEqual(10 ** (6 / 20) + 1e-9);
+    const ramps = music.gain.linearRampToValueAtTime.mock.calls.map((c) => c[0] as number);
+    expect(ramps.some((v) => Math.abs(v - boosted) < 1e-6)).toBe(true);
+    bed.setMuted(true);
+    const master = gains[0]!;
+    const muteRamps = master.gain.linearRampToValueAtTime.mock.calls.map((c) => c[0] as number);
+    expect(muteRamps.some((v) => v <= 0.0001)).toBe(true);
+    bed.play("nick");
     expect(bed.isMuted()).toBe(true);
   });
 });

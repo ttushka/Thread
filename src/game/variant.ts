@@ -2,11 +2,15 @@
  * Overnight competing experiments. Control (default / omitted / `control`)
  * is current main — do not change SEED_VERSION or control feel from here.
  *
- * Dead keys (ghost / pulse / mirror) parse as control.
+ * Dead keys (ghost / pulse / mirror / lanes) parse as control.
+ * Lanes remains in the type and sim for archaeology; picker + `?variant=lanes`
+ * no longer surface it (LANES-KILL-v1).
  */
 export type ExperimentVariant = "control" | "brake" | "beat" | "lanes";
 
 export const VARIANT_KEYS = ["control", "brake", "beat", "lanes"] as const;
+/** Chips shown to players. Lanes is intentionally absent. */
+export const PICKER_VARIANT_KEYS = ["control", "brake", "beat"] as const;
 
 export const BRAKE_SLOW = 0.45;
 
@@ -14,6 +18,25 @@ export const BEAT_BPM = 96;
 export const BEAT_PERFECT_MS_TOUCH = 120;
 export const BEAT_PERFECT_MS_KEY = 100;
 export const PERFECT_STYLE = 25;
+
+/** BEAT-STREAK-INTENSITY-v1 — feedback only; never retunes hitbox / speed / gap. */
+export const BEAT_STREAK_CAP = 8;
+export const BEAT_COOL_MS = 400;
+export const BEAT_PULSE_SCALE_MAX = 1.18;
+export const BEAT_GLOW_BLUR_MAX = 20;
+export const BEAT_BED_BOOST_DB = 6;
+export const BEAT_SHELF_DB = 3;
+
+export function beatIntensityFromStreak(streak: number): number {
+  if (!Number.isFinite(streak) || streak <= 0) return 0;
+  return Math.min(streak, BEAT_STREAK_CAP) / BEAT_STREAK_CAP;
+}
+
+/** Linear bed gain for intensity 0..1. Cap is +6 dB at 1. */
+export function beatBedGain(base: number, intensity: number): number {
+  const i = Math.min(1, Math.max(0, intensity));
+  return base * 10 ** ((BEAT_BED_BOOST_DB * i) / 20);
+}
 
 export const LANE_X = [90, 180, 270] as const;
 export const LANE_COUNT = 3;
@@ -54,11 +77,11 @@ export function isExperimentVariant(value: string | null | undefined): value is 
   return value === "control" || value === "brake" || value === "beat" || value === "lanes";
 }
 
-/** Default / omitted / `control` / unknown (incl. dead ghost/pulse/mirror) → control. */
+/** Default / omitted / `control` / unknown (incl. dead ghost/pulse/mirror/lanes) → control. */
 export function parseVariant(search: string): ExperimentVariant {
   const q = search.startsWith("?") ? search.slice(1) : search;
   const raw = new URLSearchParams(q).get("variant");
-  if (raw === "brake" || raw === "beat" || raw === "lanes") return raw;
+  if (raw === "brake" || raw === "beat") return raw;
   return "control";
 }
 

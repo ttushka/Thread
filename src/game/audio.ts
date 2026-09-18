@@ -1,4 +1,5 @@
 import type { SfxCue } from "../types.ts";
+import { BEAT_SHELF_DB, beatBedGain } from "./variant.ts";
 
 const MUSIC_GAIN = 0.42;
 const MUSIC_FADE_SEC = 0.28;
@@ -39,6 +40,18 @@ type SourceLike = {
   stop(when?: number): void;
 };
 
+type FilterLike = {
+  type: string;
+  frequency: { value: number };
+  gain: {
+    value: number;
+    setValueAtTime(value: number, startTime: number): void;
+    linearRampToValueAtTime(value: number, endTime: number): void;
+    cancelScheduledValues(startTime: number): void;
+  };
+  connect(dest: unknown): void;
+};
+
 /** Minimal AudioContext surface so tests can inject a fake. */
 export type AudioContextLike = {
   state: string;
@@ -46,6 +59,7 @@ export type AudioContextLike = {
   destination: unknown;
   createGain(): GainLike;
   createBufferSource(): SourceLike;
+  createBiquadFilter?: () => FilterLike;
   resume(): Promise<void>;
   decodeAudioData(data: ArrayBuffer): Promise<unknown>;
 };
@@ -64,6 +78,7 @@ export type AudioBed = {
   play(cue: SfxCue): void;
   setMuted(muted: boolean): void;
   isMuted(): boolean;
+  setBeatIntensity(intensity: number): void;
 };
 
 function defaultCreateContext(): AudioContextLike | null {
@@ -93,7 +108,9 @@ export function createAudioBed(opts: AudioBedOptions = {}): AudioBed {
   let master: GainLike | null = null;
   let musicGain: GainLike | null = null;
   let sfxGain: GainLike | null = null;
+  let musicFilter: FilterLike | null = null;
   let muted = false;
+  let beatIntensity = 0;
   let wantedPlaying = false;
   let musicSource: SourceLike | null = null;
   let fadingOut = false;
@@ -114,11 +131,44 @@ export function createAudioBed(opts: AudioBedOptions = {}): AudioBed {
       musicGain.gain.value = MUSIC_GAIN;
       sfxGain.gain.value = 1;
       master.gain.value = muted ? 0 : 1;
-      musicGain.connect(master);
+      if (typeof ctx.createBiquadFilter === "function") {
+        try {
+          musicFilter = ctx.createBiquadFilter();
+          musicFilter.type = "highshelf";
+          musicFilter.frequency.value = 2400;
+          musicFilter.gain.value = 0;
+          musicGain.connect(musicFilter);
+          musicFilter.connect(master);
+        } catch {
+          musicFilter = null;
+          musicGain.connect(master);
+        }
+      } else {
+        musicGain.connect(master);
+      }
       sfxGain.connect(master);
       master.connect(ctx.destination);
     }
     return ctx;
+  }
+
+  function musicTargetGain(): number {
+    return Math.max(0.0001, beatBedGain(MUSIC_GAIN, beatIntensity));
+  }
+
+  function applyBeatColor(): void {
+    if (!ctx || !musicGain || fadingOut) return;
+    const now = ctx.currentTime;
+    const g = musicTargetGain();
+    musicGain.gain.cancelScheduledValues(now);
+    musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), now);
+    musicGain.gain.linearRampToValueAtTime(g, now + 0.04);
+    if (musicFilter) {
+      const shelf = BEAT_SHELF_DB * Math.min(1, Math.max(0, beatIntensity));
+      musicFilter.gain.cancelScheduledValues(now);
+      musicFilter.gain.setValueAtTime(musicFilter.gain.value, now);
+      musicFilter.gain.linearRampToValueAtTime(shelf, now + 0.04);
+    }
   }
 
   function applyMute(): void {
@@ -168,7 +218,11 @@ export function createAudioBed(opts: AudioBedOptions = {}): AudioBed {
     const now = ac.currentTime;
     musicGain.gain.cancelScheduledValues(now);
     musicGain.gain.setValueAtTime(0.0001, now);
-    musicGain.gain.linearRampToValueAtTime(MUSIC_GAIN, now + MUSIC_FADE_IN_SEC);
+    musicGain.gain.linearRampToValueAtTime(musicTargetGain(), now + MUSIC_FADE_IN_SEC);
+    if (musicFilter) {
+      musicFilter.gain.cancelScheduledValues(now);
+      musicFilter.gain.setValueAtTime(BEAT_SHELF_DB * Math.min(1, Math.max(0, beatIntensity)), now);
+    }
     try {
       src.start();
     } catch {
@@ -219,7 +273,7 @@ export function createAudioBed(opts: AudioBedOptions = {}): AudioBed {
           const now = ctx.currentTime;
           musicGain.gain.cancelScheduledValues(now);
           musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), now);
-          musicGain.gain.linearRampToValueAtTime(MUSIC_GAIN, now + MUSIC_FADE_IN_SEC);
+          musicGain.gain.linearRampToValueAtTime(musicTargetGain(), now + MUSIC_FADE_IN_SEC);
         }
         return;
       }
@@ -254,6 +308,12 @@ export function createAudioBed(opts: AudioBedOptions = {}): AudioBed {
     },
     isMuted(): boolean {
       return muted;
+    },
+    setBeatIntensity(intensity: number): void {
+      const next = Math.min(1, Math.max(0, Number.isFinite(intensity) ? intensity : 0));
+      if (Math.abs(next - beatIntensity) < 1e-4) return;
+      beatIntensity = next;
+      applyBeatColor();
     },
   };
 }

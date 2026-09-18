@@ -10,7 +10,7 @@ import {
   VIEW_AHEAD,
   VIEW_BEHIND,
 } from "../world/constants.ts";
-import { LANE_GUIDES } from "../variant.ts";
+import { LANE_GUIDES, BEAT_PULSE_SCALE_MAX, BEAT_GLOW_BLUR_MAX } from "../variant.ts";
 
 const BG_DEEP = "#0B0D10";
 const BG_PANEL = "#12151A";
@@ -102,7 +102,7 @@ export function drawFrame(
       ctx.fillStyle = rgba(DANGER, 0.22 * phase.flash);
       ctx.fillRect(0, 0, FIELD_W, FIELD_H);
     }
-    drawVignette(ctx);
+    drawVignette(ctx, world.variant === "beat" && !world.reducedMotion ? world.beatHeat : 0);
   });
 }
 
@@ -199,19 +199,23 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
     const bars = slabPair(obs.y, obs.thickness, gap);
     const top = sy - bars.left.h / 2;
     const isGate = obs.kind === "gate";
+    const visualHeat = world.variant === "beat" && !world.reducedMotion ? world.beatHeat : 0;
     const perfect = world.variant === "beat" && world.perfectFlash > 0 && obs.id === world.lastPerfectId;
+    const glow = visualHeat * BEAT_GLOW_BLUR_MAX * (perfect ? 1 : isGate ? 0.25 : 0);
     const style = isGate
       ? {
           fill: perfect ? INK : WALL_ART.pinchLip,
           inner: perfect ? INK : PINCH_LIP_INNER,
           edge: perfect ? INK : WALL_ART.pinchLipEdge,
-          lineWidth: perfect ? WALL_ART.pinchLipStroke + 0.4 : WALL_ART.pinchLipStroke,
+          lineWidth: perfect ? WALL_ART.pinchLipStroke + 0.4 + 0.6 * visualHeat : WALL_ART.pinchLipStroke,
+          glow,
         }
       : {
           fill: WALL_ART.mover,
           inner: MOVER_INNER,
           edge: WALL_ART.moverEdge,
           lineWidth: WALL_ART.moverStroke,
+          glow: 0,
         };
     drawCraftedBar(ctx, bars.left, top, style, "left");
     drawCraftedBar(ctx, bars.right, top, style, "right");
@@ -222,16 +226,17 @@ function drawCraftedBar(
   ctx: CanvasRenderingContext2D,
   bar: { x: number; w: number; h: number },
   top: number,
-  style: { fill: string; inner: string; edge: string; lineWidth: number },
+  style: { fill: string; inner: string; edge: string; lineWidth: number; glow?: number },
   facing: "left" | "right",
 ): void {
   if (bar.w <= 0 || bar.h <= 0) return;
 
   ctx.save();
-  ctx.shadowColor = rgba(BG_DEEP, WALL_ART.contactShadowAlpha);
-  ctx.shadowBlur = WALL_ART.contactShadowBlur;
+  const glow = Math.min(BEAT_GLOW_BLUR_MAX, style.glow ?? 0);
+  ctx.shadowColor = glow > 0 ? rgba(INK, WALL_ART.contactShadowAlpha + 0.22 * Math.min(1, glow / BEAT_GLOW_BLUR_MAX)) : rgba(BG_DEEP, WALL_ART.contactShadowAlpha);
+  ctx.shadowBlur = glow > 0 ? glow : WALL_ART.contactShadowBlur;
   ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 3;
+  ctx.shadowOffsetY = glow > 0 ? 0 : 3;
   ctx.fillStyle = style.fill;
   roundRect(ctx, bar.x, top, bar.w, bar.h, 2);
   ctx.fill();
@@ -267,9 +272,18 @@ function drawLaneGuides(ctx: CanvasRenderingContext2D): void {
 /** Playfield-edge metronome. Ink-muted only — readable with the click muted. */
 function drawBeatPulse(ctx: CanvasRenderingContext2D, world: World): void {
   const amp = Math.max(0.16, world.beatPulse);
-  ctx.strokeStyle = rgba(INK_MUTED, 0.2 + 0.55 * world.beatPulse);
+  const heat = world.reducedMotion ? 0 : world.beatHeat;
+  const scale = 1 + (BEAT_PULSE_SCALE_MAX - 1) * heat;
+  const glow = Math.min(BEAT_GLOW_BLUR_MAX, BEAT_GLOW_BLUR_MAX * heat);
+  const w = (FIELD_W - 8) * scale;
+  const h = (FIELD_H - 8) * scale;
+  ctx.save();
+  ctx.shadowColor = rgba(INK_MUTED, 0.35 * heat);
+  ctx.shadowBlur = glow;
+  ctx.strokeStyle = rgba(INK_MUTED, 0.2 + 0.55 * world.beatPulse * (0.7 + 0.3 * heat));
   ctx.lineWidth = 3 + 3 * amp;
-  ctx.strokeRect(4, 4, FIELD_W - 8, FIELD_H - 8);
+  ctx.strokeRect(FIELD_W / 2 - w / 2, FIELD_H / 2 - h / 2, w, h);
+  ctx.restore();
 }
 
 function drawFinish(ctx: CanvasRenderingContext2D, finishY: number, camera: number): void {
@@ -341,7 +355,7 @@ function drawParticles(ctx: CanvasRenderingContext2D, world: World): void {
   }
 }
 
-function drawVignette(ctx: CanvasRenderingContext2D): void {
+function drawVignette(ctx: CanvasRenderingContext2D, heat = 0): void {
   const g = ctx.createRadialGradient(
     FIELD_W / 2,
     FIELD_H * 0.55,
@@ -351,7 +365,7 @@ function drawVignette(ctx: CanvasRenderingContext2D): void {
     FIELD_H * 0.72,
   );
   g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(11,13,16,0.55)");
+  g.addColorStop(1, `rgba(11,13,16,${0.55 + 0.12 * Math.min(1, Math.max(0, heat))})`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, FIELD_W, FIELD_H);
 }

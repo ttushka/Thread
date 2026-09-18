@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { Game } from "../Game.ts";
-import { parseVariant, VARIANT_TEACH, EXPERIMENT_TEACH_COPY, inRunTeachOpacity } from "../variant.ts";
+import {
+  parseVariant,
+  VARIANT_TEACH,
+  EXPERIMENT_TEACH_COPY,
+  inRunTeachOpacity,
+  PICKER_VARIANT_KEYS,
+  BEAT_STREAK_CAP,
+  BEAT_COOL_MS,
+  BEAT_PULSE_SCALE_MAX,
+  BEAT_GLOW_BLUR_MAX,
+  BEAT_BED_BOOST_DB,
+  beatIntensityFromStreak,
+  beatBedGain,
+} from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
 import dailyStream from "../__fixtures__/daily-stream-2026-09-17.json";
@@ -25,11 +38,12 @@ describe("parseVariant", () => {
     expect(parseVariant("?variant=nope")).toBe("control");
   });
 
-  it("accepts brake, beat, and lanes, including with daily", () => {
+  it("accepts brake and beat, and maps lanes (and other dead keys) to control", () => {
     expect(parseVariant("?variant=brake")).toBe("brake");
     expect(parseVariant("?variant=beat")).toBe("beat");
-    expect(parseVariant("?variant=lanes")).toBe("lanes");
+    expect(parseVariant("?variant=lanes")).toBe("control");
     expect(parseVariant("?daily=2026-09-17&variant=beat")).toBe("beat");
+    expect(parseVariant("?daily=2026-09-17&variant=lanes")).toBe("control");
   });
 
   it("locks Design teach copy for every live variant", () => {
@@ -45,6 +59,10 @@ describe("parseVariant", () => {
     expect(innerById(titleHtml, "title-hint")).toBe(VARIANT_TEACH.control);
     expect(titleHtml).not.toContain(LEGACY_GENERIC_HELPER);
     expect(titleHtml).toMatch(/id="chip-control"[^>]*\bactive\b|class="chip active"[^>]*id="chip-control"/);
+    expect(titleHtml).not.toMatch(/id="chip-lanes"/);
+    expect(titleHtml).not.toMatch(/data-variant="lanes"/);
+    expect(titleHtml).not.toMatch(/>Lanes</);
+    expect([...PICKER_VARIANT_KEYS]).toEqual(["control", "brake", "beat"]);
 
     const game = new Game(null);
     expect(parseVariant("")).toBe("control");
@@ -63,6 +81,23 @@ describe("parseVariant", () => {
     expect(inRunTeachOpacity(4.25)).toBeCloseTo(0.5, 5);
     expect(inRunTeachOpacity(4.5)).toBe(0);
     expect(inRunTeachOpacity(8)).toBe(0);
+  });
+});
+
+describe("BEAT-STREAK-INTENSITY-v1 tokens", () => {
+  it("locks streak cap, cool window, and feedback caps", () => {
+    expect(BEAT_STREAK_CAP).toBe(8);
+    expect(beatIntensityFromStreak(0)).toBe(0);
+    expect(beatIntensityFromStreak(4)).toBe(0.5);
+    expect(beatIntensityFromStreak(8)).toBe(1);
+    expect(beatIntensityFromStreak(99)).toBe(1);
+    expect(BEAT_COOL_MS).toBeLessThanOrEqual(400);
+    expect(BEAT_PULSE_SCALE_MAX).toBeLessThanOrEqual(1.18);
+    expect(BEAT_GLOW_BLUR_MAX).toBeLessThanOrEqual(20);
+    expect(BEAT_BED_BOOST_DB).toBeLessThanOrEqual(6);
+    expect(beatBedGain(0.42, 0)).toBeCloseTo(0.42, 8);
+    expect(beatBedGain(0.42, 1) / 0.42).toBeCloseTo(10 ** (BEAT_BED_BOOST_DB / 20), 8);
+    expect(beatBedGain(0.42, 1) / 0.42).toBeLessThanOrEqual(10 ** (6 / 20) + 1e-9);
   });
 });
 

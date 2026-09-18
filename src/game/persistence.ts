@@ -58,6 +58,15 @@ export function loadSave(storage: StorageLike | null | undefined): ThreadSaveV1 
         reducedMotion: Boolean(settingsRaw.reducedMotion),
         muted: Boolean(settingsRaw.muted),
       };
+      const hudRaw = isObject(settingsRaw.hud) ? settingsRaw.hud : undefined;
+      const brakeRaw = hudRaw && isObject(hudRaw.brake) ? hudRaw.brake : undefined;
+      if (brakeRaw) {
+        const x = asFiniteNumber(brakeRaw.x, Number.NaN);
+        const y = asFiniteNumber(brakeRaw.y, Number.NaN);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          save.settings.hud = { brake: { x, y } };
+        }
+      }
     }
     return save;
   } catch {
@@ -135,6 +144,30 @@ export function withMuted(save: ThreadSaveV1, muted: boolean): ThreadSaveV1 {
     ...save,
     settings: { ...save.settings, muted },
   };
+}
+
+export function brakeHudPos(save: ThreadSaveV1): { x: number; y: number } | null {
+  const pos = save.settings?.hud?.brake;
+  if (!pos) return null;
+  if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+  return { x: pos.x, y: pos.y };
+}
+
+export function withBrakeHudPos(
+  save: ThreadSaveV1,
+  pos: { x: number; y: number } | null,
+): ThreadSaveV1 {
+  const settings = { ...save.settings };
+  const hud = { ...settings.hud };
+  if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+    hud.brake = { x: pos.x, y: pos.y };
+    settings.hud = hud;
+  } else {
+    delete hud.brake;
+    if (Object.keys(hud).length > 0) settings.hud = hud;
+    else delete settings.hud;
+  }
+  return { ...save, settings };
 }
 
 export { EMPTY as EMPTY_SAVE };

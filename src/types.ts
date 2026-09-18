@@ -15,6 +15,10 @@ export type ThreadSaveV1 = {
   settings?: {
     reducedMotion?: boolean;
     muted?: boolean;
+    /** HUD parks keyed by variant. Brake button uses `brake`. */
+    hud?: {
+      brake?: { x: number; y: number };
+    };
   };
 };
 

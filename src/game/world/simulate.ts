@@ -2,7 +2,7 @@ import type { CourseSpec, ObstacleSpec, Particle, SfxCue } from "../../types.ts"
 import type { Intent } from "../../types.ts";
 import { cleanPassAward, computeScore } from "../score.ts";
 import type { ExperimentVariant } from "../variant.ts";
-import { BRAKE_SLOW, LANE_LERP_MS, LANE_X } from "../variant.ts";
+import { BRAKE_SLOW, LANE_LERP_MS, LANE_X, BEAT_COOL_MS, BEAT_STREAK_CAP, beatIntensityFromStreak } from "../variant.ts";
 import { isPerfectTiming, beatPulseAmp } from "./beat.ts";
 import {
   BASE_SPEED,
@@ -47,6 +47,10 @@ export type World = {
   perfects: number;
   perfectFlash: number;
   lastPerfectId: number;
+  /** Consecutive Beat Perfects. Feedback only. */
+  beatStreak: number;
+  /** 0..1 displayed / audio heat. Cools toward streak intensity in ≤400ms. */
+  beatHeat: number;
   /** 1 at beat, decays — draw uses this so mute-off is not required. */
   beatPulse: number;
   /** Latched for the shell to play an optional muteable click. */
@@ -159,6 +163,8 @@ export function createWorld(
     perfects: 0,
     perfectFlash: 0,
     lastPerfectId: 0,
+    beatStreak: 0,
+    beatHeat: 0,
     beatPulse: 0,
     beatClick: false,
     braking: false,
@@ -182,14 +188,30 @@ export function worldScore(world: World): number {
   return computeScore(world.distance, world.cleanAward, world.comboPeak, world.perfects);
 }
 
+function syncBeatHeat(world: World, dt: number): void {
+  if (world.variant !== "beat") {
+    world.beatStreak = 0;
+    world.beatHeat = 0;
+    return;
+  }
+  const target = beatIntensityFromStreak(world.beatStreak);
+  if (world.beatHeat < target) world.beatHeat = target;
+  else if (world.beatHeat > target) {
+    world.beatHeat = Math.max(target, world.beatHeat - dt / (BEAT_COOL_MS / 1000));
+  }
+}
+
 export function updateWorld(world: World, intent: Intent, dt: number): void {
   if (!world.alive) {
     world.deathAge += dt;
+    if (world.variant === "beat") world.beatStreak = 0;
+    syncBeatHeat(world, dt);
     fadeParticles(world, dt);
     return;
   }
   if (world.cleared) {
     world.deathAge += dt;
+    syncBeatHeat(world, dt);
     fadeParticles(world, dt);
     return;
   }
@@ -275,15 +297,23 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
         world.tension = 0;
         world.tensionTimer = 0;
         cue(world, "clean");
-        if (world.variant === "beat" && isPerfectTiming(world.time, Boolean(intent.touchScoring || intent.pointerActive))) {
-          world.perfects += 1;
-          world.perfectFlash = 0.16;
-          world.lastPerfectId = obs.id;
+        if (world.variant === "beat") {
+          if (isPerfectTiming(world.time, Boolean(intent.touchScoring || intent.pointerActive))) {
+            world.perfects += 1;
+            world.perfectFlash = 0.16;
+            world.lastPerfectId = obs.id;
+            world.beatStreak = Math.min(BEAT_STREAK_CAP, world.beatStreak + 1);
+            world.beatHeat = Math.max(world.beatHeat, beatIntensityFromStreak(world.beatStreak));
+          } else {
+            world.beatStreak = 0;
+          }
         }
         if (obs.kind === "gate") applyCleanPassJuice(world, obs);
       }
     }
   }
+
+  syncBeatHeat(world, dt);
 
   if (!world.alive) return;
 
@@ -308,6 +338,7 @@ function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
     world.tensionTimer = 0;
     world.tensionGainLock = 0;
     world.deathAge = 0;
+    if (world.variant === "beat") world.beatStreak = 0;
     if (obs) obs.nicked = true;
     cue(world, "death");
     return;
@@ -327,6 +358,7 @@ function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
     const fresh = world.nickTimer <= 0;
     world.nickTimer = NICK_MS / 1000;
     world.nearMissTimer = NEAR_MISS_MS / 1000;
+    if (world.variant === "beat") world.beatStreak = 0;
     if (fresh) cue(world, "nick");
   }
 }
@@ -365,7 +397,8 @@ function applyCleanPassJuice(world: World, obs: ObstacleRuntime): void {
 
 function spawnGatePassParticles(world: World, obs: ObstacleRuntime): void {
   const cx = (obs.left + obs.right) / 2;
-  const count = 5;
+  const extra = world.variant === "beat" ? Math.round(4 * world.beatHeat) : 0;
+  const count = 5 + extra;
   for (let i = 0; i < count; i++) {
     const ang = (Math.PI * 2 * i) / count + 0.4;
     const sp = 14 + (i % 2) * 8;

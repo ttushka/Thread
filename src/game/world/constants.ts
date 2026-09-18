@@ -26,6 +26,13 @@ export const CLEAN_PASS_FLASH_MS = 120;
 /** Static scoring-gate lips. Same slab family as movers, thinner, not animated. */
 export const GATE_LIP_THICKNESS = 12;
 export const STEER_SPEED = 280;
+/** Keyboard steer: approach key intent at this rate (units of steerSmooth / s). ~0–100% in 0.31s. */
+export const STEER_KEY_ACCEL = 3.2;
+/** Keyboard steer: approach 0 on release. Snappier than start (~0.17s from full). */
+export const STEER_KEY_DECEL = 6.0;
+/** New-press window where |steerSmooth| is capped so a tap stays a nudge. */
+export const STEER_TAP_BIAS_MS = 80;
+export const STEER_TAP_BIAS_CAP = 0.35;
 export const POINTER_LERP = 11;
 
 export const WALL_MARGIN = 14;

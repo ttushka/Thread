@@ -27,6 +27,7 @@ import {
 import { classifyGapHit, hitObstacle, type Hit } from "./collision.ts";
 import { generateCourse, moverGap, sampleWalls } from "./course.ts";
 import { clampLane, laneIndexFromX, laneIsBlockedByGap, neighborLaneBlocked } from "./lanes.ts";
+import { createSteerSmoothState, stepSteerSmooth, type SteerSmoothState } from "./steer.ts";
 
 export type World = {
   course: CourseSpec;
@@ -72,7 +73,7 @@ export type World = {
   obstacles: ObstacleRuntime[];
   /** One-shots queued this tick. Drained by Game; never blocks play. */
   sfx: SfxCue[];
-};
+} & SteerSmoothState;
 
 function cue(world: World, id: SfxCue): void {
   world.sfx.push(id);
@@ -181,6 +182,7 @@ export function createWorld(
     reducedMotion: opts.reducedMotion,
     obstacles: course.obstacles.map((o) => ({ ...o, passed: false, nicked: false })),
     sfx: [],
+    ...createSteerSmoothState(),
   };
 }
 
@@ -221,13 +223,16 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.braking = false;
   world.beatClick = false;
 
+  if (world.variant !== "lanes") {
+    stepSteerSmooth(world, intent.steer, dt);
+  }
   if (world.variant === "lanes") {
     applyLaneSteer(world, intent, dt);
   } else if (intent.pointerActive) {
     const clamped = Math.max(THREAD_RADIUS, Math.min(FIELD_W - THREAD_RADIUS, intent.pointerX));
     world.x = damp(world.x, clamped, POINTER_LERP, dt);
   } else {
-    world.x += intent.steer * STEER_SPEED * dt;
+    world.x += world.steerSmooth * STEER_SPEED * dt;
   }
   world.x = Math.max(THREAD_RADIUS, Math.min(FIELD_W - THREAD_RADIUS, world.x));
 

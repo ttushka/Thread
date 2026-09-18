@@ -1,7 +1,7 @@
 import type { CanvasHandle } from "./canvas.ts";
 import { withPlayfield } from "./canvas.ts";
 import type { World } from "../world/simulate.ts";
-import { deathPhase, interpDistance, interpX } from "../world/simulate.ts";
+import { deathPhase, interpDistance, interpX, skimJuice } from "../world/simulate.ts";
 import { moverGap, sampleWalls, slabPair } from "../world/course.ts";
 import {
   FIELD_H,
@@ -310,7 +310,7 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
 
   const bright = world.nearMissTimer > 0 && world.alive;
   const charged = world.tension > 0 && world.alive;
-  const juice = bright && world.variant === "beat" && !world.reducedMotion ? world.beatHeat : 0;
+  const juice = bright ? skimJuice(world) : 0;
   const scale = beatSkimScale(juice);
   ctx.globalAlpha = 1 - dissolve;
 

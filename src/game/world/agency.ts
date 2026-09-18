@@ -1,7 +1,7 @@
 import type { CourseSpec, ObstacleSpec } from "../../types.ts";
 import type { Intent } from "../../types.ts";
 import { CX, DIST, THREAD_RADIUS, TICK } from "./constants.ts";
-import { moverUnsafeDuration } from "./course.ts";
+import { cxFitsMoverGap, isMoverSnapPhase, moverContactTime, moverUnsafeDuration } from "./course.ts";
 import { createWorld, updateWorld, type World } from "./simulate.ts";
 
 const CENTER_HOLD: Intent = {
@@ -88,9 +88,13 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       if (Math.abs(m.baseCenter - CX) < 40 - 1e-3) {
         errors.push(`mover baseCenter on highway |c-CX|=${Math.abs(m.baseCenter - CX).toFixed(2)}`);
       }
-      const unsafe = moverUnsafeDuration(m);
-      if (unsafe < 0.35) {
-        errors.push(`mover center-hold unsafe window ${unsafe.toFixed(3)}s < 0.35s`);
+      if (isMoverSnapPhase(m)) {
+        errors.push(`mover snaps shut: CX safe at tContact−0.6s but unsafe at contact`);
+      } else if (!cxFitsMoverGap(m, moverContactTime(m))) {
+        const unsafe = moverUnsafeDuration(m);
+        if (unsafe < 0.35) {
+          errors.push(`mover center-hold unsafe window ${unsafe.toFixed(3)}s < 0.35s`);
+        }
       }
     }
   }

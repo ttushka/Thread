@@ -4,6 +4,7 @@ import { cleanPassAward, computeScore } from "../score.ts";
 import type { ExperimentVariant } from "../variant.ts";
 import {
   BRAKE_SLOW,
+  BRAKE_SKIM_HEAT,
   LANE_LERP_MS,
   LANE_X,
   BEAT_COOL_MS,
@@ -11,6 +12,7 @@ import {
   beatIntensityFromStreak,
   beatSkimParticleCount,
   beatSkimScale,
+  BEAT_SKIM_PARTICLE_BASE,
 } from "../variant.ts";
 import { isPerfectTiming, isSkimTiming, nearestBeatIndex, beatPulseAmp } from "./beat.ts";
 import {
@@ -75,6 +77,10 @@ export type World = {
   /** Latched for the shell to play an optional muteable click. */
   beatClick: boolean;
   braking: boolean;
+  /** True while a Brake-held near-miss flash is active. Draw uses this for the stronger pulse. */
+  brakeSkimPulse: boolean;
+  /** Edge for Game: a Brake skim fired this tick. */
+  brakeSkimEvent: boolean;
   laneIndex: number;
   laneFromX: number;
   laneToX: number;
@@ -238,6 +244,8 @@ export function createWorld(
     beatPulse: 0,
     beatClick: false,
     braking: false,
+    brakeSkimPulse: false,
+    brakeSkimEvent: false,
     laneIndex,
     laneFromX: x,
     laneToX: x,
@@ -299,6 +307,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.prevX = world.x;
   world.prevDistance = world.distance;
   world.braking = false;
+  world.brakeSkimEvent = false;
   world.beatClick = false;
 
   if (world.variant === "lanes") {
@@ -322,7 +331,10 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.distance += BASE_SPEED * speeding * dt;
   world.time += dt;
   if (world.nickTimer > 0) world.nickTimer = Math.max(0, world.nickTimer - dt);
-  if (world.nearMissTimer > 0) world.nearMissTimer = Math.max(0, world.nearMissTimer - dt);
+  if (world.nearMissTimer > 0) {
+    world.nearMissTimer = Math.max(0, world.nearMissTimer - dt);
+    if (world.nearMissTimer === 0) world.brakeSkimPulse = false;
+  }
   if (world.perfectFlash > 0) world.perfectFlash = Math.max(0, world.perfectFlash - dt);
   if (world.variant === "beat") {
     const prevPulse = world.beatPulse;
@@ -450,14 +462,27 @@ function pulseNearMiss(world: World): void {
   world.tensionTimer = TENSION_HOLD_MS / 1000;
   world.tensionGainLock = TENSION_GAIN_LOCK_MS / 1000;
   world.nearMissTimer = NEAR_MISS_MS / 1000;
+  const brakingSkim = world.variant === "brake" && world.braking;
+  if (brakingSkim) {
+    world.brakeSkimEvent = true;
+    if (!world.reducedMotion) world.brakeSkimPulse = true;
+  }
   cue(world, "tension");
   if (!world.reducedMotion) spawnNearMissParticles(world);
   // BEAT-SKIM-MASTERY-v1: juice uses current heat; credit after so this skim does not double.
   if (world.variant === "beat" && isSkimTiming(world.time)) creditBeatStreak(world);
 }
 
+/** Visual near-miss heat. Brake skim uses a modest cap; Beat uses streak heat. */
+export function skimJuice(world: World): number {
+  if (world.reducedMotion) return 0;
+  if (world.variant === "beat") return world.beatHeat;
+  if (world.brakeSkimPulse) return BRAKE_SKIM_HEAT;
+  return 0;
+}
+
 function spawnNearMissParticles(world: World): void {
-  const heat = world.variant === "beat" ? world.beatHeat : 0;
+  const heat = skimJuice(world);
   const count = beatSkimParticleCount(heat);
   const scale = beatSkimScale(heat);
   for (let i = 0; i < count; i++) {
@@ -470,13 +495,14 @@ function spawnNearMissParticles(world: World): void {
       vy: Math.sin(ang) * sp,
       life: 0.22,
       maxLife: 0.22,
-      ink: world.variant === "beat" && i >= 4,
+      ink: i >= BEAT_SKIM_PARTICLE_BASE,
     });
   }
 }
 
 function applyCleanPassJuice(world: World, obs: ObstacleRuntime): void {
   if (world.reducedMotion) return;
+  world.brakeSkimPulse = false;
   world.nearMissTimer = CLEAN_PASS_FLASH_MS / 1000;
   spawnGatePassParticles(world, obs);
 }

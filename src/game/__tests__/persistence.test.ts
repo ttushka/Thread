@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SAVE_KEY,
+  BRAKE_SKIM_TEACH_KEY,
   dailyAttemptsFor,
   dailyBestFor,
   loadSave,
@@ -11,6 +12,8 @@ import {
   withReducedMotion,
   withBrakeHudPos,
   brakeHudPos,
+  brakeSkimTeachSeen,
+  markBrakeSkimTeachSeen,
   writeSave,
   type StorageLike,
 } from "../persistence.ts";
@@ -110,5 +113,19 @@ describe("thread.v1 persistence", () => {
     writeSave(s, save);
     expect(brakeHudPos(loadSave(s))).toBeNull();
     expect(loadSave(s).settings?.muted).toBe(true);
+  });
+
+  it("persists Brake skim teach as a dedicated key, independent of thread.v1", () => {
+    const s = new MemoryStorage();
+    expect(BRAKE_SKIM_TEACH_KEY).toBe("thread.v1.brakeSkimTeachSeen");
+    expect(brakeSkimTeachSeen(s)).toBe(false);
+    markBrakeSkimTeachSeen(s);
+    expect(s.getItem(BRAKE_SKIM_TEACH_KEY)).toBe("1");
+    expect(brakeSkimTeachSeen(s)).toBe(true);
+    expect(s.getItem(SAVE_KEY)).toBeNull();
+    s.setItem(SAVE_KEY, JSON.stringify({ v: 1, endlessBest: 9, daily: { dateKey: "", best: 0 } }));
+    expect(brakeSkimTeachSeen(s)).toBe(true);
+    s.setItem(BRAKE_SKIM_TEACH_KEY, "");
+    expect(brakeSkimTeachSeen(s)).toBe(false);
   });
 });

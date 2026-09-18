@@ -31,6 +31,12 @@ export const BEAT_SKIM_MS = 180;
 export const BEAT_SKIM_PARTICLE_BASE = 4;
 export const BEAT_SKIM_PARTICLE_EXTRA = 4;
 
+/** BRAKE-SKIM-NARRATIVE-v1 — feedback + copy only; never retunes hitbox / speed / score. */
+export const BRAKE_SKIM_HEAT = 0.5;
+export const BRAKE_SKIM_TEACH = "Skim while slow — that's the craft.";
+export const BRAKE_SKIM_TEACH_S = 3.5;
+export const BRAKE_SKIM_TEACH_FADE_S = 0.5;
+
 export function beatIntensityFromStreak(streak: number): number {
   if (!Number.isFinite(streak) || streak <= 0) return 0;
   return Math.min(streak, BEAT_STREAK_CAP) / BEAT_STREAK_CAP;
@@ -54,6 +60,20 @@ export function beatSkimParticleCount(heat: number): number {
 /** Visual skim scale — same near-miss family, intensity cap from pulse ≤1.18. */
 export function beatSkimScale(heat: number): number {
   return 1 + (BEAT_PULSE_SCALE_MAX - 1) * clampHeat(heat);
+}
+
+/** Modest Brake skim pulse. Same teal/ink family; ≤ existing intensity cap. */
+export function brakeSkimScale(): number {
+  return beatSkimScale(BRAKE_SKIM_HEAT);
+}
+
+/** Brake skim teach: hold, then fade. Total ~3.5s. */
+export function brakeSkimTeachOpacity(ageS: number): number {
+  const hold = BRAKE_SKIM_TEACH_S - BRAKE_SKIM_TEACH_FADE_S;
+  if (ageS <= hold) return 1;
+  const t = (ageS - hold) / BRAKE_SKIM_TEACH_FADE_S;
+  if (t >= 1) return 0;
+  return 1 - t;
 }
 
 export const LANE_X = [90, 180, 270] as const;

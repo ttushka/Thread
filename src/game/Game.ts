@@ -13,12 +13,14 @@ import {
   withMuted,
   withReducedMotion,
   writeSave,
+  brakeSkimTeachSeen,
+  markBrakeSkimTeachSeen,
 } from "./persistence.ts";
 import { dailyRunSeed } from "./modes/daily.ts";
 import { endlessSeed } from "./modes/endless.ts";
 import { utcDateKey } from "./seed.ts";
 import { formatDailyShare, dailyDeepLink } from "./share.ts";
-import { VARIANT_LABEL, VARIANT_TEACH, inRunTeachOpacity, type ExperimentVariant } from "./variant.ts";
+import { VARIANT_LABEL, VARIANT_TEACH, inRunTeachOpacity, brakeSkimTeachOpacity, BRAKE_SKIM_TEACH, type ExperimentVariant } from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
 
 export type GameSnapshot = {
@@ -65,12 +67,16 @@ export class Game {
   /** Latched until overlayReady so Enter during the death freeze is not dropped. */
   private restartQueued = false;
   private sfxQueue: SfxCue[] = [];
+  /** Age in seconds while Brake skim teach is showing; `done` until the next run. */
+  private brakeSkimTeach: { age: number } | "done" | null = null;
+  private brakeSkimTeachSeen = false;
 
   constructor(storage: StorageLike | null, opts?: { endlessSeed?: number; variant?: ExperimentVariant }) {
     this.storage = storage;
     this.save = loadSave(storage);
     this.injectedEndless = opts?.endlessSeed;
     if (opts?.variant) this.variant = opts.variant;
+    this.brakeSkimTeachSeen = brakeSkimTeachSeen(storage);
   }
 
   setVariant(variant: ExperimentVariant): void {
@@ -140,11 +146,13 @@ export class Game {
     this.world = null;
     this.ended = false;
     this.restartQueued = false;
+    this.brakeSkimTeach = null;
   }
 
   private beginRun(): void {
     this.ended = false;
     this.restartQueued = false;
+    this.brakeSkimTeach = null;
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
       reducedMotion: Boolean(this.save.settings?.reducedMotion),
@@ -159,6 +167,8 @@ export class Game {
     if (this.world && (this.screen === "play" || this.screen === "dead" || this.screen === "cleared")) {
       updateWorld(this.world, this.screen === "play" ? intent : idleIntent(), dt);
       this.takeSfx();
+      if (this.screen === "play") this.stepBrakeSkimTeach(dt);
+      this.noteBrakeSkim();
     }
 
     if (this.screen === "play" && this.world) {
@@ -185,6 +195,22 @@ export class Game {
     if (!this.world || this.world.sfx.length === 0) return;
     this.sfxQueue.push(...this.world.sfx);
     this.world.sfx.length = 0;
+  }
+
+  private noteBrakeSkim(): void {
+    if (!this.world?.brakeSkimEvent) return;
+    this.world.brakeSkimEvent = false;
+    if (this.variant !== "brake") return;
+    if (this.brakeSkimTeachSeen) return;
+    this.brakeSkimTeachSeen = true;
+    markBrakeSkimTeachSeen(this.storage);
+    this.brakeSkimTeach = { age: 0 };
+  }
+
+  private stepBrakeSkimTeach(dt: number): void {
+    if (!this.brakeSkimTeach || this.brakeSkimTeach === "done") return;
+    this.brakeSkimTeach.age += dt;
+    if (brakeSkimTeachOpacity(this.brakeSkimTeach.age) <= 0) this.brakeSkimTeach = "done";
   }
 
   private finishRun(kind: "dead" | "cleared"): void {
@@ -219,6 +245,16 @@ export class Game {
           })
         : null;
 
+    const skimTeach = this.brakeSkimTeach;
+    let teach = VARIANT_TEACH[this.variant];
+    let teachOpacity = this.screen === "play" && world ? inRunTeachOpacity(world.time) : 0;
+    if (this.screen === "play" && skimTeach && skimTeach !== "done") {
+      teach = BRAKE_SKIM_TEACH;
+      teachOpacity = brakeSkimTeachOpacity(skimTeach.age);
+    } else if (skimTeach === "done") {
+      teachOpacity = 0;
+    }
+
     return {
       screen: this.screen,
       mode: this.mode,
@@ -242,8 +278,8 @@ export class Game {
       muted: Boolean(this.save.settings?.muted),
       variant: this.variant,
       variantLabel: VARIANT_LABEL[this.variant],
-      teach: VARIANT_TEACH[this.variant],
-      teachOpacity: this.screen === "play" && world ? inRunTeachOpacity(world.time) : 0,
+      teach,
+      teachOpacity,
       braking: Boolean(world?.braking),
       beatMuted: this.beatMuted,
     };

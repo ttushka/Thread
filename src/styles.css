@@ -162,6 +162,11 @@ body {
   margin-top: 4px;
 }
 
+.recurrence-line {
+  margin-top: 12px;
+  line-height: 1.45;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

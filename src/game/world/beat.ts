@@ -1,4 +1,4 @@
-import { BEAT_BPM, BEAT_PERFECT_MS_KEY, BEAT_PERFECT_MS_TOUCH } from "../variant.ts";
+import { BEAT_BPM, BEAT_PERFECT_MS_KEY, BEAT_PERFECT_MS_TOUCH, BEAT_SKIM_MS } from "../variant.ts";
 import { BASE_SPEED } from "./constants.ts";
 
 export function beatPeriod(bpm = BEAT_BPM): number {
@@ -36,6 +36,18 @@ export function perfectWindowMs(touch: boolean): number {
 
 export function isPerfectTiming(time: number, touch: boolean, bpm = BEAT_BPM): boolean {
   return msToNearestBeat(time, bpm) <= perfectWindowMs(touch) + 1e-6;
+}
+
+/** Nearest metronome index — shared by Perfect and on-pulse skim credits. */
+export function nearestBeatIndex(time: number, bpm = BEAT_BPM): number {
+  const period = beatPeriod(bpm);
+  if (period <= 0) return 0;
+  return Math.round(time / period);
+}
+
+/** Wall-skim streak window. Same clock as Perfect; ±180ms, input-agnostic. */
+export function isSkimTiming(time: number, bpm = BEAT_BPM): boolean {
+  return msToNearestBeat(time, bpm) <= BEAT_SKIM_MS + 1e-6;
 }
 
 /** 1 at beat center, decaying over ~120ms — visual pulse works muted. */

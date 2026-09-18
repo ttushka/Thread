@@ -87,4 +87,6 @@ export type Particle = {
   vy: number;
   life: number;
   maxLife: number;
+  /** Beat skim extra sparks. Teal/ink only; omitted = teal. */
+  ink?: boolean;
 };

@@ -11,8 +11,11 @@ import {
   BEAT_PULSE_SCALE_MAX,
   BEAT_GLOW_BLUR_MAX,
   BEAT_BED_BOOST_DB,
+  BEAT_SKIM_MS,
   beatIntensityFromStreak,
   beatBedGain,
+  beatSkimParticleCount,
+  beatSkimScale,
 } from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
@@ -98,6 +101,18 @@ describe("BEAT-STREAK-INTENSITY-v1 tokens", () => {
     expect(beatBedGain(0.42, 0)).toBeCloseTo(0.42, 8);
     expect(beatBedGain(0.42, 1) / 0.42).toBeCloseTo(10 ** (BEAT_BED_BOOST_DB / 20), 8);
     expect(beatBedGain(0.42, 1) / 0.42).toBeLessThanOrEqual(10 ** (6 / 20) + 1e-9);
+  });
+});
+
+describe("BEAT-SKIM-MASTERY-v1 tokens", () => {
+  it("locks the on-pulse skim window and teal/ink spark counts", () => {
+    expect(BEAT_SKIM_MS).toBe(180);
+    expect(beatSkimParticleCount(0)).toBe(4);
+    expect(beatSkimParticleCount(0.5)).toBe(6);
+    expect(beatSkimParticleCount(1)).toBe(8);
+    expect(beatSkimScale(0)).toBe(1);
+    expect(beatSkimScale(1)).toBe(BEAT_PULSE_SCALE_MAX);
+    expect(beatSkimScale(1)).toBeLessThanOrEqual(1.18);
   });
 });
 

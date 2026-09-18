@@ -17,11 +17,12 @@ import {
 } from "./game/variant.ts";
 import {
   applyBrakeStyle,
-  BRAKE_DRAG_THRESHOLD_PX,
-  BRAKE_LONG_PRESS_MS,
+  brakeHudDown,
+  brakeHudMove,
+  brakeHudUp,
   clampBrakePos,
+  createBrakeHudPointer,
   defaultBrakePos,
-  pastDragThreshold,
   readSafeAreaInsets,
   type Point,
   type Rect,
@@ -181,15 +182,7 @@ function applyVariant(variant: ExperimentVariant): void {
   paintChrome(true);
 }
 
-type BrakeDrag = {
-  pointerId: number;
-  startClientX: number;
-  startClientY: number;
-  origin: Point;
-  dragging: boolean;
-};
-let brakeDrag: BrakeDrag | null = null;
-let brakeLongPress: number | null = null;
+let brakeHud = createBrakeHudPointer();
 
 function brakeViewBox(): ViewBox {
   const r = app!.getBoundingClientRect();
@@ -216,16 +209,10 @@ function layoutBrake(forceDefault = false): Point {
   return pos;
 }
 
-function clearBrakeLongPress(): void {
-  if (brakeLongPress !== null) {
-    window.clearTimeout(brakeLongPress);
-    brakeLongPress = null;
-  }
-}
-
 function resetBrakePark(): void {
   layoutBrake(true);
   game.setBrakeHudPos(null);
+  brakeHud = { ...brakeHud, lastStillUpAt: 0 };
 }
 
 const holdBrake = (e: PointerEvent) => {
@@ -240,51 +227,36 @@ const holdBrake = (e: PointerEvent) => {
   const appRect = app!.getBoundingClientRect();
   const btnRect = btnBrake.getBoundingClientRect();
   const origin = { x: btnRect.left - appRect.left, y: btnRect.top - appRect.top };
-  brakeDrag = {
-    pointerId: e.pointerId,
-    startClientX: e.clientX,
-    startClientY: e.clientY,
-    origin,
-    dragging: false,
-  };
+  brakeHud = brakeHudDown(brakeHud, e.pointerId, e.clientX, e.clientY, origin, performance.now());
   input.setBrakeHold(true);
   btnBrake.classList.add("held");
-  clearBrakeLongPress();
-  brakeLongPress = window.setTimeout(() => {
-    if (!brakeDrag || brakeDrag.dragging) return;
-    resetBrakePark();
-  }, BRAKE_LONG_PRESS_MS);
+  // Still press is hold-to-brake for any duration — no in-hold park reset timer.
 };
 const moveBrake = (e: PointerEvent) => {
-  if (!brakeDrag || e.pointerId !== brakeDrag.pointerId) return;
+  const s = brakeHud.session;
+  if (!s || s.pointerId !== e.pointerId) return;
   e.preventDefault();
-  const dx = e.clientX - brakeDrag.startClientX;
-  const dy = e.clientY - brakeDrag.startClientY;
-  if (!brakeDrag.dragging && pastDragThreshold(dx, dy, BRAKE_DRAG_THRESHOLD_PX)) {
-    brakeDrag.dragging = true;
-    clearBrakeLongPress();
+  const moved = brakeHudMove(brakeHud, e.pointerId, e.clientX, e.clientY);
+  brakeHud = moved.hud;
+  if (moved.beganDrag) {
     input.setBrakeHold(false);
     btnBrake.classList.remove("held");
     btnBrake.classList.add("dragging");
   }
-  if (!brakeDrag.dragging) return;
-  const pos = clampBrakePos(
-    { x: brakeDrag.origin.x + dx, y: brakeDrag.origin.y + dy },
-    brakeViewBox(),
-    brakeAvoid(),
-  );
-  applyBrakeStyle(btnBrake, pos);
+  if (!moved.live) return;
+  applyBrakeStyle(btnBrake, clampBrakePos(moved.live, brakeViewBox(), brakeAvoid()));
 };
 const releaseBrake = (e: PointerEvent) => {
-  if (!brakeDrag || e.pointerId !== brakeDrag.pointerId) return;
-  if (brakeDrag.dragging) {
-    game.setBrakeHudPos({
-      x: Number.parseFloat(btnBrake.style.left) || 0,
-      y: Number.parseFloat(btnBrake.style.top) || 0,
-    });
-  }
-  brakeDrag = null;
-  clearBrakeLongPress();
+  const s = brakeHud.session;
+  if (!s || s.pointerId !== e.pointerId) return;
+  const parked = {
+    x: Number.parseFloat(btnBrake.style.left) || 0,
+    y: Number.parseFloat(btnBrake.style.top) || 0,
+  };
+  const ended = brakeHudUp(brakeHud, e.pointerId, performance.now(), parked);
+  if (ended.persist) game.setBrakeHudPos(ended.persist);
+  brakeHud = ended.hud;
+  if (ended.resetPark) resetBrakePark();
   input.setBrakeHold(false);
   btnBrake.classList.remove("held", "dragging");
   try {
@@ -359,7 +331,7 @@ function paintChrome(force = false): void {
 
   const showBrake = !onTitle && !onResult && snap.variant === "brake";
   const wasBrakeHidden = btnBrake.classList.contains("hidden");
-  if (!showBrake && brakeDrag?.dragging) {
+  if (!showBrake && brakeHud.session?.dragging) {
     game.setBrakeHudPos({
       x: Number.parseFloat(btnBrake.style.left) || 0,
       y: Number.parseFloat(btnBrake.style.top) || 0,
@@ -369,9 +341,8 @@ function paintChrome(force = false): void {
   if (!showBrake) {
     input.setBrakeHold(false);
     btnBrake.classList.remove("held", "dragging");
-    brakeDrag = null;
-    clearBrakeLongPress();
-  } else if (wasBrakeHidden && !brakeDrag) {
+    brakeHud = createBrakeHudPointer();
+  } else if (wasBrakeHidden && !brakeHud.session) {
     layoutBrake();
   }
   hudSlow.hidden = !snap.braking;
@@ -447,7 +418,7 @@ const loop = createLoop(
 
 window.addEventListener("resize", () => {
   view.resize();
-  if (!btnBrake.classList.contains("hidden") && !brakeDrag) layoutBrake();
+  if (!btnBrake.classList.contains("hidden") && !brakeHud.session) layoutBrake();
 });
 loop.start();
 paintChrome(true);

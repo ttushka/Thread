@@ -227,11 +227,14 @@ const holdBrake = (e: PointerEvent) => {
   if (e.button !== 0 && e.pointerType === "mouse") return;
   e.preventDefault();
   e.stopPropagation();
-  btnBrake.setPointerCapture(e.pointerId);
-  const origin = {
-    x: Number.parseFloat(btnBrake.style.left) || layoutBrake().x,
-    y: Number.parseFloat(btnBrake.style.top) || layoutBrake().y,
-  };
+  try {
+    btnBrake.setPointerCapture(e.pointerId);
+  } catch {
+    /* capture optional — window listeners still track the drag */
+  }
+  const appRect = app!.getBoundingClientRect();
+  const btnRect = btnBrake.getBoundingClientRect();
+  const origin = { x: btnRect.left - appRect.left, y: btnRect.top - appRect.top };
   brakeDrag = {
     pointerId: e.pointerId,
     startClientX: e.clientX,
@@ -250,7 +253,6 @@ const holdBrake = (e: PointerEvent) => {
 const moveBrake = (e: PointerEvent) => {
   if (!brakeDrag || e.pointerId !== brakeDrag.pointerId) return;
   e.preventDefault();
-  e.stopPropagation();
   const dx = e.clientX - brakeDrag.startClientX;
   const dy = e.clientY - brakeDrag.startClientY;
   if (!brakeDrag.dragging && pastDragThreshold(dx, dy, BRAKE_DRAG_THRESHOLD_PX)) {
@@ -269,9 +271,8 @@ const moveBrake = (e: PointerEvent) => {
   applyBrakeStyle(btnBrake, pos);
 };
 const releaseBrake = (e: PointerEvent) => {
-  if (brakeDrag && e.pointerId !== brakeDrag.pointerId) return;
-  e.stopPropagation();
-  if (brakeDrag?.dragging) {
+  if (!brakeDrag || e.pointerId !== brakeDrag.pointerId) return;
+  if (brakeDrag.dragging) {
     game.setBrakeHudPos({
       x: Number.parseFloat(btnBrake.style.left) || 0,
       y: Number.parseFloat(btnBrake.style.top) || 0,
@@ -289,9 +290,9 @@ const releaseBrake = (e: PointerEvent) => {
 };
 
 btnBrake.addEventListener("pointerdown", holdBrake);
-btnBrake.addEventListener("pointermove", moveBrake);
-btnBrake.addEventListener("pointerup", releaseBrake);
-btnBrake.addEventListener("pointercancel", releaseBrake);
+window.addEventListener("pointermove", moveBrake, { capture: true });
+window.addEventListener("pointerup", releaseBrake, { capture: true });
+window.addEventListener("pointercancel", releaseBrake, { capture: true });
 btnBrake.addEventListener("contextmenu", (e) => e.preventDefault());
 
 const deep = parseDeepLink(window.location.search);
@@ -353,6 +354,12 @@ function paintChrome(force = false): void {
 
   const showBrake = !onTitle && !onResult && snap.variant === "brake";
   const wasBrakeHidden = btnBrake.classList.contains("hidden");
+  if (!showBrake && brakeDrag?.dragging) {
+    game.setBrakeHudPos({
+      x: Number.parseFloat(btnBrake.style.left) || 0,
+      y: Number.parseFloat(btnBrake.style.top) || 0,
+    });
+  }
   btnBrake.classList.toggle("hidden", !showBrake);
   if (!showBrake) {
     input.setBrakeHold(false);

@@ -280,7 +280,7 @@ function drawBeatPulse(ctx: CanvasRenderingContext2D, world: World): void {
   ctx.save();
   ctx.shadowColor = rgba(INK_MUTED, 0.35 * heat);
   ctx.shadowBlur = glow;
-  ctx.strokeStyle = rgba(INK_MUTED, 0.2 + 0.55 * world.beatPulse * (0.7 + 0.3 * heat));
+  ctx.strokeStyle = rgba(INK_MUTED, 0.2 + 0.55 * world.beatPulse + 0.18 * heat);
   ctx.lineWidth = 3 + 3 * amp;
   ctx.strokeRect(FIELD_W / 2 - w / 2, FIELD_H / 2 - h / 2, w, h);
   ctx.restore();

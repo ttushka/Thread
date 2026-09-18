@@ -2,8 +2,16 @@ import type { CourseSpec, ObstacleSpec, Particle, SfxCue } from "../../types.ts"
 import type { Intent } from "../../types.ts";
 import { cleanPassAward, computeScore } from "../score.ts";
 import type { ExperimentVariant } from "../variant.ts";
-import { BRAKE_SLOW, LANE_LERP_MS, LANE_X, BEAT_COOL_MS, BEAT_STREAK_CAP, beatIntensityFromStreak } from "../variant.ts";
-import { isPerfectTiming, beatPulseAmp } from "./beat.ts";
+import {
+  BRAKE_SLOW,
+  LANE_LERP_MS,
+  LANE_X,
+  BEAT_COOL_MS,
+  BEAT_STREAK_CAP,
+  beatIntensityFromStreak,
+  beatSkimParticleCount,
+} from "../variant.ts";
+import { isPerfectTiming, isSkimTiming, nearestBeatIndex, beatPulseAmp } from "./beat.ts";
 import {
   BASE_SPEED,
   CLEAN_PASS_FLASH_MS,
@@ -55,8 +63,10 @@ export type World = {
   perfects: number;
   perfectFlash: number;
   lastPerfectId: number;
-  /** Consecutive Beat Perfects. Feedback only. */
+  /** Consecutive Beat Perfects or on-pulse skims. Feedback only. */
   beatStreak: number;
+  /** Beat index last granted a streak tick (Perfect or skim). -1 = none. */
+  beatCreditIndex: number;
   /** 0..1 displayed / audio heat. Cools toward streak intensity in ≤400ms. */
   beatHeat: number;
   /** 1 at beat, decays — draw uses this so mute-off is not required. */
@@ -222,6 +232,7 @@ export function createWorld(
     perfectFlash: 0,
     lastPerfectId: 0,
     beatStreak: 0,
+    beatCreditIndex: -1,
     beatHeat: 0,
     beatPulse: 0,
     beatClick: false,
@@ -257,6 +268,16 @@ function syncBeatHeat(world: World, dt: number): void {
   else if (world.beatHeat > target) {
     world.beatHeat = Math.max(target, world.beatHeat - dt / (BEAT_COOL_MS / 1000));
   }
+}
+
+/** One streak tick per beat index. Shared by Perfect and on-pulse skim. */
+function creditBeatStreak(world: World): void {
+  if (world.variant !== "beat") return;
+  const index = nearestBeatIndex(world.time);
+  if (world.beatCreditIndex === index) return;
+  world.beatCreditIndex = index;
+  world.beatStreak = Math.min(BEAT_STREAK_CAP, world.beatStreak + 1);
+  world.beatHeat = Math.max(world.beatHeat, beatIntensityFromStreak(world.beatStreak));
 }
 
 export function updateWorld(world: World, intent: Intent, dt: number): void {
@@ -362,8 +383,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
             world.perfects += 1;
             world.perfectFlash = 0.16;
             world.lastPerfectId = obs.id;
-            world.beatStreak = Math.min(BEAT_STREAK_CAP, world.beatStreak + 1);
-            world.beatHeat = Math.max(world.beatHeat, beatIntensityFromStreak(world.beatStreak));
+            creditBeatStreak(world);
           } else {
             world.beatStreak = 0;
           }
@@ -431,13 +451,16 @@ function pulseNearMiss(world: World): void {
   world.nearMissTimer = NEAR_MISS_MS / 1000;
   cue(world, "tension");
   if (!world.reducedMotion) spawnNearMissParticles(world);
+  // BEAT-SKIM-MASTERY-v1: juice uses current heat; credit after so this skim does not double.
+  if (world.variant === "beat" && isSkimTiming(world.time)) creditBeatStreak(world);
 }
 
 function spawnNearMissParticles(world: World): void {
-  const count = 4;
+  const heat = world.variant === "beat" ? world.beatHeat : 0;
+  const count = beatSkimParticleCount(heat);
   for (let i = 0; i < count; i++) {
     const ang = (Math.PI * 2 * i) / count + 0.15;
-    const sp = 18 + (i % 2) * 10;
+    const sp = 18 + (i % 2) * 10 + 10 * heat;
     world.particles.push({
       x: world.x,
       y: 0,
@@ -445,6 +468,7 @@ function spawnNearMissParticles(world: World): void {
       vy: Math.sin(ang) * sp,
       life: 0.22,
       maxLife: 0.22,
+      ink: world.variant === "beat" && i >= 4,
     });
   }
 }

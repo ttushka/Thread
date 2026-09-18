@@ -334,8 +334,9 @@ h2 {
 
 .brake-btn {
   position: absolute;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(20px, env(safe-area-inset-bottom));
+  left: max(12px, calc(env(safe-area-inset-left) + 12px));
+  bottom: max(12px, calc(env(safe-area-inset-bottom) + 12px));
+  right: auto;
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -344,10 +345,12 @@ h2 {
   color: var(--ink);
   font: inherit;
   font-size: 13px;
-  cursor: pointer;
+  cursor: grab;
   z-index: 3;
   pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -360,6 +363,11 @@ h2 {
 .brake-btn.held {
   border-color: var(--thread);
   color: var(--thread);
+}
+
+.brake-btn.dragging {
+  cursor: grabbing;
+  border-color: var(--thread-dim);
 }
 
 @media (prefers-reduced-motion: reduce) {

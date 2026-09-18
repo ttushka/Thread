@@ -9,6 +9,8 @@ import {
   recordEndlessBest,
   withMuted,
   withReducedMotion,
+  withBrakeHudPos,
+  brakeHudPos,
   writeSave,
   type StorageLike,
 } from "../persistence.ts";
@@ -93,5 +95,20 @@ describe("thread.v1 persistence", () => {
     writeSave(s, save);
     expect(loadSave(s).settings?.muted).toBe(false);
     expect(loadSave(s).settings?.reducedMotion).toBe(true);
+  });
+
+  it("persists Brake HUD park keyed by variant without dropping mute", () => {
+    const s = new MemoryStorage();
+    let save = loadSave(s);
+    save = withMuted(save, true);
+    save = withBrakeHudPos(save, { x: 24, y: 640 });
+    writeSave(s, save);
+    const round = loadSave(s);
+    expect(round.settings?.muted).toBe(true);
+    expect(brakeHudPos(round)).toEqual({ x: 24, y: 640 });
+    save = withBrakeHudPos(round, null);
+    writeSave(s, save);
+    expect(brakeHudPos(loadSave(s))).toBeNull();
+    expect(loadSave(s).settings?.muted).toBe(true);
   });
 });

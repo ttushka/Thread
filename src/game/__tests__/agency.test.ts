@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dailySeed } from "../seed.ts";
 import { generateCourse } from "../world/course.ts";
 import { checkCourseLayout, scoringGates, simulateCenterHold } from "../world/agency.ts";
-import { CX, DIST } from "../world/constants.ts";
+import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S } from "../world/constants.ts";
 
 const DATES = ["2026-09-17", "2026-09-18", "2026-01-01", "2026-12-31", "2027-06-06"];
 const ENDLESS_SEEDS = [1, 42, 0x4eadc0de, 0xc0ffee];
@@ -41,6 +41,33 @@ describe("Daily agency validators", () => {
       const course = generateCourse(dailySeed(date), { daily: true });
       const n = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.rhythmEnd).length;
       expect(n, date).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("raises first-40s lip density one notch without breaking telegraph", () => {
+    expect(EARLY_PINCH.stepMin).toBe(90);
+    expect(EARLY_PINCH.stepMax).toBe(110);
+    expect(EARLY_MOVER_BAND.stepMin).toBe(95);
+    expect(EARLY_MOVER_BAND.stepMax).toBe(120);
+    expect(EARLY_PINCH.minOffset).toBe(58);
+    expect(EARLY_MOVER_BAND.minOffset).toBe(64);
+    expect(LIP_TELEGRAPH_MIN_S).toBe(0.6);
+    expect(EARLY_PINCH.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+    expect(EARLY_MOVER_BAND.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+
+    for (const date of DATES) {
+      const course = generateCourse(dailySeed(date), { daily: true });
+      const early = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.moverEnd);
+      expect(early.length, date).toBeGreaterThanOrEqual(20);
+      for (let i = 1; i < early.length; i++) {
+        const dy = early[i]!.y - early[i - 1]!.y;
+        expect(dy / BASE_SPEED, date).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S - 1e-6);
+      }
+    }
+    for (const seed of ENDLESS_SEEDS) {
+      const course = generateCourse(seed, { daily: false, endlessHorizon: 4000 });
+      const early = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.moverEnd);
+      expect(early.length, String(seed)).toBeGreaterThanOrEqual(20);
     }
   });
 

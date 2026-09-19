@@ -1,6 +1,6 @@
 import type { CourseSpec, ObstacleSpec } from "../../types.ts";
 import type { Intent } from "../../types.ts";
-import { CX, DIST, THREAD_RADIUS, TICK } from "./constants.ts";
+import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S, THREAD_RADIUS, TICK } from "./constants.ts";
 import { cxFitsMoverGap, isMoverSnapPhase, moverContactTime, moverUnsafeDuration } from "./course.ts";
 import { createWorld, updateWorld, type World } from "./simulate.ts";
 
@@ -18,8 +18,8 @@ export function scoringGates(course: CourseSpec): ObstacleSpec[] {
 
 export function minOffsetForGateY(y: number): number {
   if (y < DIST.openEnd) return 0;
-  if (y < DIST.pinchEnd) return 52;
-  if (y < DIST.moverEnd) return 58;
+  if (y < DIST.pinchEnd) return EARLY_PINCH.minOffset;
+  if (y < DIST.moverEnd) return EARLY_MOVER_BAND.minOffset;
   if (y < DIST.rhythmEnd) return 64;
   return 52;
 }
@@ -61,6 +61,13 @@ export function checkCourseLayout(course: CourseSpec): string[] {
     const sb = Math.sign(b.baseCenter - CX);
     if (sa === 0 || sb === 0 || sa === sb) {
       errors.push(`alternation broken between gates ${a.id}@${a.y.toFixed(0)} and ${b.id}@${b.y.toFixed(0)}`);
+    }
+    const dy = b.y - a.y;
+    const telegraph = dy / BASE_SPEED;
+    if (telegraph < LIP_TELEGRAPH_MIN_S - 1e-6) {
+      errors.push(
+        `scoring gates ${a.id}→${b.id} telegraph ${telegraph.toFixed(3)}s < ${LIP_TELEGRAPH_MIN_S}s`,
+      );
     }
   }
 

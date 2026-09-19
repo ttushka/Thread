@@ -164,8 +164,8 @@ describe("Daily movers after phase search", () => {
 
   it("replays the same mover phase for the same Daily key", () => {
     const seed = dailySeed("2026-09-17");
-    const a = streamEvents(generateCourse(seed, { daily: true }), 16);
-    const b = streamEvents(generateCourse(seed, { daily: true }), 16);
+    const a = streamEvents(generateCourse(seed, { daily: true }));
+    const b = streamEvents(generateCourse(seed, { daily: true }));
     expect(a).toEqual(b);
     const movers = a.filter((e) => e.kind === "mover");
     expect(movers.length).toBe(1);

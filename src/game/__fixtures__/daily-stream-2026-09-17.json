@@ -1,15 +1,15 @@
 {
   "dateKey": "2026-09-17",
-  "seedVersion": 2,
-  "seed": 968819113,
+  "seedVersion": 3,
+  "seed": 952041494,
   "note": "SEED_VERSION / content change: bump SEED_VERSION when regenerating this file.",
   "events": [
     {
       "id": 1,
       "kind": "gate",
-      "y": 594.1164,
-      "center": 243.8022,
-      "gap": 136.6045,
+      "y": 571.3944,
+      "center": 251.3563,
+      "gap": 136.2482,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -17,9 +17,9 @@
     {
       "id": 2,
       "kind": "gate",
-      "y": 715.1649,
-      "center": 119.3304,
-      "gap": 130.3391,
+      "y": 680.7617,
+      "center": 115.5336,
+      "gap": 137.9329,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -27,9 +27,9 @@
     {
       "id": 3,
       "kind": "gate",
-      "y": 826.2864,
-      "center": 240.2584,
-      "gap": 129.5168,
+      "y": 780.9542,
+      "center": 250.9909,
+      "gap": 121.168,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -37,9 +37,9 @@
     {
       "id": 4,
       "kind": "gate",
-      "y": 947.3425,
-      "center": 120.5121,
-      "gap": 124.1235,
+      "y": 873.8754,
+      "center": 113.7671,
+      "gap": 141.4658,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -47,9 +47,9 @@
     {
       "id": 5,
       "kind": "gate",
-      "y": 1057.7702,
-      "center": 240.1987,
-      "gap": 122.6366,
+      "y": 965.2482,
+      "center": 246.3724,
+      "gap": 141.7448,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -57,9 +57,9 @@
     {
       "id": 6,
       "kind": "gate",
-      "y": 1163.7239,
-      "center": 114.4647,
-      "gap": 140.0706,
+      "y": 1072.7882,
+      "center": 111.2658,
+      "gap": 136.6016,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -67,9 +67,9 @@
     {
       "id": 7,
       "kind": "gate",
-      "y": 1285.4857,
-      "center": 245.6543,
-      "gap": 119.8655,
+      "y": 1176.9577,
+      "center": 248.9629,
+      "gap": 134.9708,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -77,9 +77,9 @@
     {
       "id": 8,
       "kind": "gate",
-      "y": 1410.214,
-      "center": 117.208,
-      "gap": 134.5841,
+      "y": 1282.9491,
+      "center": 113.142,
+      "gap": 135.885,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -87,9 +87,9 @@
     {
       "id": 9,
       "kind": "gate",
-      "y": 1520.8164,
-      "center": 234.7055,
-      "gap": 118.411,
+      "y": 1381.5444,
+      "center": 245.756,
+      "gap": 138.5092,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -97,9 +97,9 @@
     {
       "id": 10,
       "kind": "gate",
-      "y": 1639.7091,
-      "center": 118.2241,
-      "gap": 132.5517,
+      "y": 1479.1476,
+      "center": 112.8777,
+      "gap": 129.6859,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -107,9 +107,9 @@
     {
       "id": 11,
       "kind": "gate",
-      "y": 1750.3196,
-      "center": 242.9692,
-      "gap": 128.0666,
+      "y": 1584.3844,
+      "center": 251.2278,
+      "gap": 125.3715,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -117,9 +117,9 @@
     {
       "id": 12,
       "kind": "gate",
-      "y": 1883.4654,
-      "center": 110.6103,
-      "gap": 132.4152,
+      "y": 1679.8618,
+      "center": 116.8609,
+      "gap": 122.0624,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -127,9 +127,9 @@
     {
       "id": 13,
       "kind": "gate",
-      "y": 2011.9667,
-      "center": 238.8886,
-      "gap": 126.071,
+      "y": 1788.5676,
+      "center": 246.2263,
+      "gap": 134.9106,
       "amplitude": 0,
       "period": 1,
       "phase": 0
@@ -137,29 +137,29 @@
     {
       "id": 14,
       "kind": "gate",
-      "y": 2123.9866,
-      "center": 120.9027,
-      "gap": 112.0904,
+      "y": 1894.4904,
+      "center": 109.1806,
+      "gap": 122.7715,
       "amplitude": 0,
       "period": 1,
       "phase": 0
     },
     {
       "id": 15,
-      "kind": "mover",
-      "y": 2218.7456,
-      "center": 246.1922,
-      "gap": 118.7229,
-      "amplitude": 66.7468,
-      "period": 2.8774,
-      "phase": 4.0579
+      "kind": "gate",
+      "y": 1998.5928,
+      "center": 245.3858,
+      "gap": 134.884,
+      "amplitude": 0,
+      "period": 1,
+      "phase": 0
     },
     {
       "id": 16,
       "kind": "gate",
-      "y": 2340.9875,
-      "center": 249.9607,
-      "gap": 125.8175,
+      "y": 2102.1894,
+      "center": 107.7443,
+      "gap": 128.3955,
       "amplitude": 0,
       "period": 1,
       "phase": 0

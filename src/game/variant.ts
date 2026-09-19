@@ -33,6 +33,8 @@ export const BEAT_SKIM_PARTICLE_EXTRA = 4;
 
 /** BRAKE-SKIM-NARRATIVE-v1 — feedback + copy only; never retunes hitbox / speed / score. */
 export const BRAKE_SKIM_HEAT = 0.5;
+/** CORE-LOOP-SKIM-NATIVE-v1 Slice A — Control near-miss juice; below Brake-held. */
+export const CONTROL_SKIM_HEAT = 0.35;
 export const BRAKE_SKIM_TEACH = "Skim while slow — that's the craft.";
 export const BRAKE_SKIM_TEACH_S = 3.5;
 export const BRAKE_SKIM_TEACH_FADE_S = 0.5;
@@ -105,7 +107,7 @@ export const VARIANT_LABEL: Record<ExperimentVariant, string> = {
 };
 
 export const VARIANT_TEACH: Record<ExperimentVariant, string> = {
-  control: "Steer through the lips. Don’t touch the walls.",
+  control: "Skim the edge \u2014 that\u2019s the craft.",
   brake: "Hold Brake (or Space) to slow. Steer the gaps.",
   beat: "Skim the wall on the pulse \u2014 that\u2019s the craft. Click optional.",
   lanes: "Swipe or tap sides to change lane. Stay in the open one.",

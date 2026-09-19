@@ -5,6 +5,7 @@ import type { ExperimentVariant } from "../variant.ts";
 import {
   BRAKE_SLOW,
   BRAKE_SKIM_HEAT,
+  CONTROL_SKIM_HEAT,
   LANE_LERP_MS,
   LANE_X,
   BEAT_COOL_MS,
@@ -79,6 +80,8 @@ export type World = {
   braking: boolean;
   /** True while a Brake-held near-miss flash is active. Draw uses this for the stronger pulse. */
   brakeSkimPulse: boolean;
+  /** True while an analog near-miss flash is active (Control skim juice). */
+  edgeSkimPulse: boolean;
   /** Edge for Game: a Brake skim fired this tick. */
   brakeSkimEvent: boolean;
   /** Edge for Game: an on-pulse Beat skim credited this tick. */
@@ -247,6 +250,7 @@ export function createWorld(
     beatClick: false,
     braking: false,
     brakeSkimPulse: false,
+    edgeSkimPulse: false,
     brakeSkimEvent: false,
     beatSkimEvent: false,
     laneIndex,
@@ -338,7 +342,10 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   if (world.nickTimer > 0) world.nickTimer = Math.max(0, world.nickTimer - dt);
   if (world.nearMissTimer > 0) {
     world.nearMissTimer = Math.max(0, world.nearMissTimer - dt);
-    if (world.nearMissTimer === 0) world.brakeSkimPulse = false;
+    if (world.nearMissTimer === 0) {
+      world.brakeSkimPulse = false;
+      world.edgeSkimPulse = false;
+    }
   }
   if (world.perfectFlash > 0) world.perfectFlash = Math.max(0, world.perfectFlash - dt);
   if (world.variant === "beat") {
@@ -467,6 +474,7 @@ function pulseNearMiss(world: World): void {
   world.tensionTimer = TENSION_HOLD_MS / 1000;
   world.tensionGainLock = TENSION_GAIN_LOCK_MS / 1000;
   world.nearMissTimer = NEAR_MISS_MS / 1000;
+  world.edgeSkimPulse = true;
   const brakingSkim = world.variant === "brake" && world.braking;
   if (brakingSkim) {
     world.brakeSkimEvent = true;
@@ -480,11 +488,12 @@ function pulseNearMiss(world: World): void {
   }
 }
 
-/** Visual near-miss heat. Brake skim uses a modest cap; Beat uses streak heat. */
+/** Visual near-miss heat. Brake skim uses a modest cap; Beat uses streak heat; Control uses edge skim. */
 export function skimJuice(world: World): number {
   if (world.reducedMotion) return 0;
   if (world.variant === "beat") return world.beatHeat;
   if (world.brakeSkimPulse) return BRAKE_SKIM_HEAT;
+  if (world.edgeSkimPulse) return CONTROL_SKIM_HEAT;
   return 0;
 }
 
@@ -509,7 +518,8 @@ function spawnNearMissParticles(world: World): void {
 
 function applyCleanPassJuice(world: World, obs: ObstacleRuntime): void {
   if (world.reducedMotion) return;
-  world.brakeSkimPulse = false;
+  // Slice A: a skim already playing is the craft — don't replace it with center-gap sparks.
+  if (world.edgeSkimPulse || world.brakeSkimPulse) return;
   world.nearMissTimer = CLEAN_PASS_FLASH_MS / 1000;
   spawnGatePassParticles(world, obs);
 }

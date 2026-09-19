@@ -23,6 +23,8 @@ export const TENSION_HOLD_MS = 1200;
 export const TENSION_GAIN_LOCK_MS = 200;
 /** Clean Pass thread accent. Same family as near-miss; brief 80–120ms. */
 export const CLEAN_PASS_FLASH_MS = 120;
+/** Fairness #19 / feel-sanity: no lip closer than this in time. */
+export const LIP_TELEGRAPH_MIN_S = 0.6;
 /** Static scoring-gate lips. Same slab family as movers, thinner, not animated. */
 export const GATE_LIP_THICKNESS = 12;
 export const STEER_SPEED = 280;
@@ -44,6 +46,29 @@ export const DIST = {
   moverEnd: 3600,
   rhythmEnd: 5400,
   dailyFinish: 5580,
+} as const;
+
+/**
+ * CORE-LOOP-SKIM-NATIVE-v1 Slice A — first ~40s Endless/Daily (openEnd→moverEnd).
+ * Density +1 notch vs prior 105–125 / 110–135. Offset +1 notch vs 52 / 58.
+ * Steps stay ≥ LIP_TELEGRAPH_MIN_S at BASE_SPEED (no snap-shut).
+ */
+export const EARLY_PINCH = {
+  gapMin: 118,
+  gapMax: 142,
+  minOffset: 58,
+  offJitter: 14,
+  stepMin: 90,
+  stepMax: 110,
+} as const;
+
+export const EARLY_MOVER_BAND = {
+  gapMin: 110,
+  gapMax: 136,
+  minOffset: 64,
+  offJitter: 12,
+  stepMin: 95,
+  stepMax: 120,
 } as const;
 
 export const VIEW_AHEAD = THREAD_SCREEN_Y;

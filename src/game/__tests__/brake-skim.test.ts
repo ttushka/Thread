@@ -13,6 +13,7 @@ import {
   BRAKE_SKIM_HEAT,
   BRAKE_SKIM_TEACH,
   BRAKE_SKIM_TEACH_S,
+  CONTROL_SKIM_HEAT,
   VARIANT_TEACH,
   beatSkimParticleCount,
   beatSkimScale,
@@ -93,6 +94,8 @@ describe("BRAKE-SKIM-NARRATIVE-v1 tokens", () => {
     expect(brakeSkimTeachOpacity(3.25)).toBeCloseTo(0.5, 5);
     expect(brakeSkimTeachOpacity(3.5)).toBe(0);
     expect(BRAKE_SKIM_HEAT).toBe(0.5);
+    expect(CONTROL_SKIM_HEAT).toBe(0.35);
+    expect(CONTROL_SKIM_HEAT).toBeLessThan(BRAKE_SKIM_HEAT);
     expect(brakeSkimScale()).toBe(beatSkimScale(BRAKE_SKIM_HEAT));
     expect(brakeSkimScale()).toBeGreaterThan(1);
     expect(brakeSkimScale()).toBeLessThanOrEqual(BEAT_PULSE_SCALE_MAX);
@@ -115,21 +118,28 @@ describe("BRAKE-SKIM-NARRATIVE-v1 pulse", () => {
     expect(held.brakeSkimEvent).toBe(true);
     expect(held.nearMissTimer).toBeGreaterThan(0);
 
-    expect(control.particles).toHaveLength(beatSkimParticleCount(0));
+    expect(control.particles).toHaveLength(beatSkimParticleCount(CONTROL_SKIM_HEAT));
     expect(free.particles).toHaveLength(control.particles.length);
     expect(held.particles).toHaveLength(beatSkimParticleCount(BRAKE_SKIM_HEAT));
     expect(held.particles.filter((p) => p.ink).length).toBe(
       beatSkimParticleCount(BRAKE_SKIM_HEAT) - BEAT_SKIM_PARTICLE_BASE,
     );
     expect(held.particles.filter((p) => !p.ink).length).toBe(BEAT_SKIM_PARTICLE_BASE);
-    expect(control.particles.every((p) => !p.ink)).toBe(true);
-    expect(free.particles.every((p) => !p.ink)).toBe(true);
+    expect(control.particles.filter((p) => p.ink).length).toBe(
+      beatSkimParticleCount(CONTROL_SKIM_HEAT) - BEAT_SKIM_PARTICLE_BASE,
+    );
+    expect(free.particles.filter((p) => p.ink).length).toBe(
+      beatSkimParticleCount(CONTROL_SKIM_HEAT) - BEAT_SKIM_PARTICLE_BASE,
+    );
 
-    expect(maxSpeed(held) / maxSpeed(control)).toBeCloseTo(brakeSkimScale(), 8);
+    expect(maxSpeed(held) / maxSpeed(control)).toBeCloseTo(
+      brakeSkimScale() / beatSkimScale(CONTROL_SKIM_HEAT),
+      8,
+    );
     expect(maxSpeed(held) / maxSpeed(control)).toBeLessThanOrEqual(BEAT_PULSE_SCALE_MAX + 1e-9);
     expect(skimJuice(held)).toBe(BRAKE_SKIM_HEAT);
-    expect(skimJuice(control)).toBe(0);
-    expect(skimJuice(free)).toBe(0);
+    expect(skimJuice(control)).toBe(CONTROL_SKIM_HEAT);
+    expect(skimJuice(free)).toBe(CONTROL_SKIM_HEAT);
 
     expect(held.tension).toBe(1);
     expect(control.tension).toBe(1);
@@ -145,9 +155,8 @@ describe("BRAKE-SKIM-NARRATIVE-v1 pulse", () => {
     expect(beat.brakeSkimPulse).toBe(false);
     expect(control.brakeSkimEvent).toBe(false);
     expect(beat.brakeSkimEvent).toBe(false);
-    expect(control.particles).toHaveLength(beatSkimParticleCount(0));
+    expect(control.particles).toHaveLength(beatSkimParticleCount(CONTROL_SKIM_HEAT));
     expect(beat.particles).toHaveLength(beatSkimParticleCount(0));
-    expect(control.particles.every((p) => !p.ink)).toBe(true);
     expect(beat.particles.every((p) => !p.ink)).toBe(true);
     expect(control.beatStreak).toBe(0);
     expect(beat.beatStreak).toBe(1);
@@ -240,7 +249,7 @@ describe("BRAKE-SKIM-NARRATIVE-v1 teach", () => {
     expect(game.snapshot().teach).not.toBe(BRAKE_SKIM_TEACH);
     expect(world.brakeSkimEvent).toBe(false);
     expect(world.brakeSkimPulse).toBe(false);
-    expect(world.particles).toHaveLength(beatSkimParticleCount(0));
+    expect(world.particles).toHaveLength(beatSkimParticleCount(CONTROL_SKIM_HEAT));
     expect(storage.getItem(BRAKE_SKIM_TEACH_KEY)).toBeNull();
     expect(brakeSkimTeachSeen(storage)).toBe(false);
   });

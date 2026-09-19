@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ObstacleSpec } from "../../types.ts";
 import { dailySeed } from "../seed.ts";
-import { BASE_SPEED, CX, MOVER_BAND, THREAD_RADIUS } from "../world/constants.ts";
+import { BASE_SPEED, CX, ROOM_C, THREAD_RADIUS } from "../world/constants.ts";
 import {
   cxFitsMoverGap,
   generateCourse,
@@ -151,7 +151,7 @@ describe("Daily movers after phase search", () => {
     for (const date of DATES) {
       const course = generateCourse(dailySeed(date), { daily: true });
       const movers = course.obstacles.filter((o) => o.kind === "mover");
-      expect(movers.length, date).toBe(MOVER_BAND.count);
+      expect(movers.length, date).toBe(ROOM_C.count);
       for (const m of movers) {
         expect(isMoverSnapPhase(m), date).toBe(false);
         const tContact = moverContactTime(m);
@@ -168,7 +168,7 @@ describe("Daily movers after phase search", () => {
     const b = streamEvents(generateCourse(seed, { daily: true }));
     expect(a).toEqual(b);
     const movers = a.filter((e) => e.kind === "mover");
-    expect(movers.length).toBe(MOVER_BAND.count);
+    expect(movers.length).toBe(ROOM_C.count);
     expect(movers.map((m) => m.phase)).toEqual(b.filter((e) => e.kind === "mover").map((m) => m.phase));
   });
 });

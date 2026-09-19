@@ -5,7 +5,7 @@ import {
   BASE_SPEED,
   DIST,
   LIP_TELEGRAPH_MIN_S,
-  MOVER_BAND,
+  ROOM_C,
   MOVER_MOTION,
 } from "../world/constants.ts";
 import { generateCourse, isMoverSnapPhase, moverContactTime, cxFitsMoverGap } from "../world/course.ts";
@@ -16,7 +16,7 @@ const ENDLESS_SEEDS = [1, 42, 0x4eadc0de, 0xc0ffee];
 
 function bandMovers(course: ReturnType<typeof generateCourse>) {
   return course.obstacles
-    .filter((o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd)
+    .filter((o) => o.kind === "mover" && o.y >= DIST.roomBEnd && o.y <= DIST.roomCEnd)
     .sort((a, b) => a.y - b.y || a.id - b.id);
 }
 
@@ -25,14 +25,14 @@ function peakGapSpeed(amplitude: number, period: number): number {
   return (Math.PI * 2 * amplitude) / period;
 }
 
-describe("Slice C — movers as mid-spice", () => {
-  it("locks ~2× mover-band placement and readable-mid motion tokens", () => {
-    expect(MOVER_BAND.count).toBe(2);
-    expect(MOVER_BAND.firstMin).toBe(280);
-    expect(MOVER_BAND.firstMax).toBe(520);
-    expect(MOVER_BAND.spacingMin).toBe(720);
-    expect(MOVER_BAND.spacingMax).toBe(980);
-    expect(MOVER_BAND.spacingMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+describe("Room C — mover gauntlet (readable mid)", () => {
+  it("locks 4-mover gauntlet placement and readable-mid motion tokens", () => {
+    expect(ROOM_C.count).toBe(4);
+    expect(ROOM_C.firstMin).toBe(160);
+    expect(ROOM_C.firstMax).toBe(260);
+    expect(ROOM_C.spacingMin).toBe(240);
+    expect(ROOM_C.spacingMax).toBe(340);
+    expect(ROOM_C.spacingMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
     expect(MOVER_MOTION.gapMin).toBe(100);
     expect(MOVER_MOTION.gapMax).toBe(120);
     expect(MOVER_MOTION.amplitudeMin).toBe(48);
@@ -46,28 +46,28 @@ describe("Slice C — movers as mid-spice", () => {
     expect(LIP_TELEGRAPH_MIN_S).toBe(0.6);
   });
 
-  it("places two movers in the 20–40s band on Daily, Endless, and Beat", () => {
+  it("places four movers in the 40–60s band on Daily, Endless, and Beat", () => {
     for (const date of DATES) {
       for (const variant of [undefined, "beat"] as const) {
         const course = generateCourse(dailySeed(date), { daily: true, variant });
         const movers = bandMovers(course);
-        expect(movers.length, `${date} ${variant ?? "control"}`).toBe(MOVER_BAND.count);
+        expect(movers.length, `${date} ${variant ?? "control"}`).toBe(ROOM_C.count);
         expect((movers[1]!.y - movers[0]!.y) / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
-        expect(movers[0]!.y).toBeGreaterThanOrEqual(DIST.pinchEnd + MOVER_BAND.firstMin);
-        expect(movers[0]!.y).toBeLessThanOrEqual(DIST.pinchEnd + MOVER_BAND.firstMax);
-        expect(movers[1]!.y).toBeLessThanOrEqual(DIST.moverEnd - MOVER_BAND.tailPad);
+        expect(movers[0]!.y).toBeGreaterThanOrEqual(DIST.roomBEnd + ROOM_C.firstMin);
+        expect(movers[0]!.y).toBeLessThanOrEqual(DIST.roomBEnd + ROOM_C.firstMax);
+        expect(movers[movers.length - 1]!.y).toBeLessThanOrEqual(DIST.roomCEnd - ROOM_C.tailPad);
       }
     }
     for (const seed of ENDLESS_SEEDS) {
-      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.moverEnd + 80 });
-      expect(bandMovers(course).length, String(seed)).toBe(MOVER_BAND.count);
+      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.roomCEnd + 80 });
+      expect(bandMovers(course).length, String(seed)).toBe(ROOM_C.count);
     }
   });
 
   it("keeps generated motion in the readable-mid band and never snap-shuts", () => {
     const samples = [
       ...DATES.map((date) => generateCourse(dailySeed(date), { daily: true })),
-      ...ENDLESS_SEEDS.map((seed) => generateCourse(seed, { daily: false, endlessHorizon: DIST.moverEnd + 80 })),
+      ...ENDLESS_SEEDS.map((seed) => generateCourse(seed, { daily: false, endlessHorizon: DIST.roomCEnd + 80 })),
     ];
     for (const course of samples) {
       expect(checkCourseLayout(course)).toEqual([]);

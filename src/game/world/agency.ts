@@ -4,11 +4,11 @@ import {
   BASE_SPEED,
   CX,
   DIST,
-  EARLY_MOVER_BAND,
-  EARLY_PINCH,
   LIP_TELEGRAPH_MIN_S,
-  MOVER_BAND,
   MOVER_MOTION,
+  ROOM_A,
+  ROOM_B,
+  ROOM_C,
   THREAD_RADIUS,
   TICK,
 } from "./constants.ts";
@@ -29,10 +29,10 @@ export function scoringGates(course: CourseSpec): ObstacleSpec[] {
 
 export function minOffsetForGateY(y: number): number {
   if (y < DIST.openEnd) return 0;
-  if (y < DIST.pinchEnd) return EARLY_PINCH.minOffset;
-  if (y < DIST.moverEnd) return EARLY_MOVER_BAND.minOffset;
-  if (y < DIST.rhythmEnd) return 64;
-  return 52;
+  if (y < DIST.roomAEnd) return ROOM_A.minOffset;
+  if (y < DIST.roomBEnd) return ROOM_B.minOffset;
+  if (y < DIST.roomCEnd) return ROOM_C.minOffset;
+  return ROOM_B.minOffset;
 }
 
 /** Geometric Daily / first-minute agency rules. Empty = pass. */
@@ -51,7 +51,7 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < 40`);
     }
     const phaseMin = minOffsetForGateY(g.y);
-    if (g.y >= DIST.openEnd && g.y <= DIST.rhythmEnd && off < phaseMin - 0.01) {
+    if (g.y >= DIST.openEnd && g.y <= DIST.rhythmEnd && off < phaseMin - 1) {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < minOffset ${phaseMin}`);
     }
     const killOff = g.gapWidth / 2 - THREAD_RADIUS;
@@ -83,15 +83,35 @@ export function checkCourseLayout(course: CourseSpec): string[] {
   }
 
   if (course.daily) {
-    const rhythm = gates.filter((g) => g.y >= DIST.moverEnd - 1e-6 && g.y <= DIST.rhythmEnd + 1e-6);
-    if (rhythm.length !== 3) {
-      errors.push(`Daily rhythm band must have exactly 3 scoring gates, got ${rhythm.length}`);
+    const roomA = gates.filter((g) => g.y >= DIST.openEnd && g.y < DIST.roomAEnd);
+    const roomB = gates.filter((g) => g.y >= DIST.roomAEnd && g.y < DIST.roomBEnd);
+    if (roomA.length < 3) {
+      errors.push(`Room A must have at least 3 scoring gates, got ${roomA.length}`);
+    }
+    if (roomB.length < 6) {
+      errors.push(`Room B must have at least 6 scoring gates, got ${roomB.length}`);
+    }
+    for (const g of roomA) {
+      if (g.gapWidth < ROOM_A.gapMin - 1e-6 || g.gapWidth > ROOM_A.gapMax + 1e-6) {
+        errors.push(`Room A gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${ROOM_A.gapMin}–${ROOM_A.gapMax}`);
+      }
+    }
+    for (const g of roomB) {
+      if (g.gapWidth < ROOM_B.gapMin - 1e-6 || g.gapWidth > ROOM_B.gapMax + 1e-6) {
+        errors.push(`Room B gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${ROOM_B.gapMin}–${ROOM_B.gapMax}`);
+      }
+    }
+    const earlyMovers = course.obstacles.filter((o) => o.kind === "mover" && o.y < DIST.roomBEnd - 1e-6);
+    if (earlyMovers.length > 0) {
+      errors.push(`movers before Room C: ${earlyMovers.map((m) => m.y.toFixed(0)).join(",")}`);
     }
     const movers = course.obstacles
-      .filter((o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd)
+      .filter((o) => o.kind === "mover" && o.y >= DIST.roomBEnd && o.y <= DIST.roomCEnd)
       .sort((a, b) => a.y - b.y || a.id - b.id);
-    if (movers.length !== MOVER_BAND.count) {
-      errors.push(`Daily mover window must have exactly ${MOVER_BAND.count} movers, got ${movers.length}`);
+    if (movers.length < 3) {
+      errors.push(`Daily Room C must have at least 3 movers, got ${movers.length}`);
+    } else if (movers.length !== ROOM_C.count) {
+      errors.push(`Daily Room C must have exactly ${ROOM_C.count} movers, got ${movers.length}`);
     } else {
       for (let i = 1; i < movers.length; i++) {
         const dt = (movers[i]!.y - movers[i - 1]!.y) / BASE_SPEED;

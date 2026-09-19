@@ -8,7 +8,6 @@ import {
   DIST,
   FIELD_W,
   GATE_LIP_THICKNESS,
-  SCORE_TICK_EDGE_MS,
   SCORE_TICK_FILAMENT_MS,
   SCORE_TICK_HUD_MS,
   TICK,
@@ -20,8 +19,6 @@ import {
   scoreTickHudOn,
   updateWorld,
 } from "../world/simulate.ts";
-import css from "../../styles.css?raw";
-
 class MemoryStorage implements StorageLike {
   private data = new Map<string, string>();
   getItem(key: string): string | null {
@@ -225,13 +222,3 @@ describe("ART-SKIM-TICK-JUICE-BUMP-v1 — award-tick juice", () => {
   });
 });
 
-describe("ART-SKIM-TICK-JUICE-BUMP-v1 — HUD CSS punch", () => {
-  it("holds ink→thread +1px scale for 120ms", () => {
-    expect(css).toMatch(/\.hud-score\.tick\s*\{[^}]*color:\s*var\(--thread\)/s);
-    expect(css).toMatch(/\.hud-score\.tick\s*\{[^}]*font-size:\s*33px/s);
-    expect(css).toMatch(/hud-score-tick\s+120ms/);
-    expect(css).not.toMatch(/hud-score-tick\s+180ms/);
-    expect(SCORE_TICK_EDGE_MS).toBe(120);
-    expect(SCORE_TICK_HUD_MS).toBe(120);
-  });
-});

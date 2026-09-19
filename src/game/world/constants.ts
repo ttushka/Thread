@@ -58,10 +58,10 @@ export const KEYFRAME_PAD = 80;
  */
 export const DIST = {
   /**
-   * Soft-friends Room A fix v2: ~6.5s safe open before scoring
-   * (v1 was 5.0s / 450; floor is 6.0s / 540).
+   * Soft-friends Room A fix v3: ≥800 (~9s) safe open before scoring
+   * (v2 was 6.5s / 585; v1 was 5.0s / 450).
    */
-  openEnd: 585,
+  openEnd: 800,
   roomAEnd: 1350,
   roomBEnd: 3600,
   roomCEnd: 5400,
@@ -84,21 +84,24 @@ export function roomAt(y: number): CourseRoom {
  * dead (center scores nothing / nicks). Soft-friends weave into the pocket;
  * holding center still dies.
  *
- * First cluster (v2): 2 lips, openings at the CX-kill ceiling (~170). A 180–190
- * *opening* would always cover CX on FIELD_W=360, so 180–190 is the spacing
- * between those two lips (learnable L/R, not machine-gun). Later Room A
- * tightens back to gapMin/stepMin. Wall-margin still allows a CX-kill offset.
+ * First teach (v3): 1 offset lip at the CX-kill opening ceiling (~170), then a
+ * long calm gap (≥250) before the next lip. A 180–200 *opening* would cover CX
+ * on FIELD_W=360 (max CX-dead gap is <171 with WALL_MARGIN), so the hole stays
+ * 168–170 and minOffset 80. After the calm, later Room A resumes gapMin/stepMin.
  */
 export const ROOM_A = {
   gapMin: 150,
   gapMax: 166,
-  /** First lips after the open — wide enough for weave+Brake, still CX-dead. */
+  /** First teach lip — as wide as weave+Brake allows while CX stays dead. */
   firstGapMin: 168,
   firstGapMax: 170,
-  firstCount: 2,
-  /** Spacing between the two first-cluster lips (not the approach to lip 1). */
-  firstStepMin: 180,
-  firstStepMax: 190,
+  firstCount: 1,
+  /** Approach from openEnd onto the single teach lip. */
+  firstStepMin: 32,
+  firstStepMax: 40,
+  /** Distance after the teach lip before the next scoring lip. */
+  calmGapMin: 250,
+  calmGapMax: 260,
   minOffset: 80,
   offJitter: 8,
   stepMin: 104,

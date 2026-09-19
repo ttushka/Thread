@@ -34,8 +34,8 @@ function gauntletMovers(course: ReturnType<typeof generateCourse>) {
 
 describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
   it("locks the 0–15 / 15–40 / 40–60s marks at 90 u/s", () => {
-    expect(DIST.openEnd).toBeGreaterThanOrEqual(540);
-    expect(DIST.openEnd / BASE_SPEED).toBeCloseTo(6.5, 5);
+    expect(DIST.openEnd).toBeGreaterThanOrEqual(800);
+    expect(DIST.openEnd / BASE_SPEED).toBeCloseTo(800 / 90, 5);
     expect(DIST.roomAEnd / BASE_SPEED).toBeCloseTo(15, 5);
     expect(DIST.roomBEnd / BASE_SPEED).toBeCloseTo(40, 5);
     expect(DIST.roomCEnd / BASE_SPEED).toBeCloseTo(60, 5);
@@ -51,10 +51,14 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     expect(ROOM_A.gapMin).toBeGreaterThan(ROOM_B.gapMax);
     expect(ROOM_A.firstGapMin).toBeGreaterThan(ROOM_A.gapMin);
     expect(ROOM_A.firstGapMax).toBe(170);
-    expect(ROOM_A.firstCount).toBe(2);
-    expect(ROOM_A.firstStepMin).toBe(180);
-    expect(ROOM_A.firstStepMax).toBe(190);
+    expect(ROOM_A.firstCount).toBe(1);
+    expect(ROOM_A.firstStepMin).toBe(32);
+    expect(ROOM_A.firstStepMax).toBe(40);
+    expect(ROOM_A.calmGapMin).toBeGreaterThanOrEqual(250);
+    expect(ROOM_A.calmGapMax).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
     expect(ROOM_A.minOffset).toBe(80);
+    // 180–200 openings cover CX on FIELD_W=360; stay at the CX-dead ceiling.
+    expect(ROOM_A.firstGapMax).toBeLessThan(171);
     expect(ROOM_A.minOffset).toBeGreaterThan(ROOM_B.minOffset);
     expect(ROOM_C.count).toBeGreaterThanOrEqual(3);
     expect(ROOM_A.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
@@ -80,9 +84,12 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
         expect(g.gapWidth, `${date} A-first ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.firstGapMin);
         expect(g.gapWidth, `${date} A-first ${g.id}`).toBeLessThanOrEqual(ROOM_A.firstGapMax);
       }
-      const clusterDy = first[1]!.y - first[0]!.y;
-      expect(clusterDy, `${date} A-first spacing`).toBeGreaterThanOrEqual(ROOM_A.firstStepMin);
-      expect(clusterDy, `${date} A-first spacing`).toBeLessThanOrEqual(ROOM_A.firstStepMax);
+      const calmDy = a[1]!.y - a[0]!.y;
+      expect(calmDy, `${date} A-teach calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
+      expect(calmDy, `${date} A-teach calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
+      for (const g of a.slice(ROOM_A.firstCount)) {
+        expect(g.gapWidth, `${date} A-later ${g.id}`).toBeLessThanOrEqual(ROOM_A.gapMax);
+      }
       for (const g of a) {
         expect(g.gapWidth, `${date} A ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.gapMin);
         expect(Math.abs(g.baseCenter - CX), `${date} A ${g.id}`).toBeGreaterThan(g.gapWidth / 2 - 5);
@@ -152,7 +159,7 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     }
   });
 
-  it("lets a timid weave+Brake clear the first Room A cluster", () => {
+  it("lets a timid weave+Brake clear the first Room A teach lip", () => {
     const timidWeave = (seed: number, daily: boolean) => {
       const world = createWorld(seed, {
         daily,
@@ -187,7 +194,7 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
       const { world, first } = timidWeave(seed, false);
       expect(world.alive, `endless ${seed}`).toBe(true);
       expect(world.distance, `endless ${seed}`).toBeGreaterThan(first.y);
-      expect(first.y / BASE_SPEED, `endless ${seed}`).toBeGreaterThanOrEqual(6);
+      expect(first.y / BASE_SPEED, `endless ${seed}`).toBeGreaterThanOrEqual(800 / 90);
     }
     for (const date of DATES) {
       const { world, first } = timidWeave(dailySeed(date), true);
@@ -206,10 +213,12 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
       });
       const gates = scoringGates(world.course).filter((g) => roomAt(g.y) === "A");
       expect(gates[0]!.y, `endless ${seed} first lip`).toBeGreaterThanOrEqual(DIST.openEnd);
-      expect(gates[0]!.y / BASE_SPEED, `endless ${seed} open`).toBeGreaterThanOrEqual(6);
-      const clusterDy = gates[1]!.y - gates[0]!.y;
-      expect(clusterDy, `endless ${seed} first spacing`).toBeGreaterThanOrEqual(ROOM_A.firstStepMin);
-      expect(clusterDy, `endless ${seed} first spacing`).toBeLessThanOrEqual(ROOM_A.firstStepMax);
+      expect(gates[0]!.y / BASE_SPEED, `endless ${seed} open`).toBeGreaterThanOrEqual(800 / 90);
+      expect(gates[0]!.gapWidth, `endless ${seed} teach`).toBeGreaterThanOrEqual(ROOM_A.firstGapMin);
+      expect(gates[0]!.gapWidth, `endless ${seed} teach`).toBeLessThanOrEqual(ROOM_A.firstGapMax);
+      const calmDy = gates[1]!.y - gates[0]!.y;
+      expect(calmDy, `endless ${seed} calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
+      expect(calmDy, `endless ${seed} calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
 
       const cap = Math.ceil(90 / TICK);
       for (let i = 0; i < cap; i++) {

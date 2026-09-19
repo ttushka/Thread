@@ -24,6 +24,15 @@ export const TENSION_HOLD_MS = 1200;
 export const TENSION_GAIN_LOCK_MS = 200;
 /** Gray HUD "through" flash. Not combo food — no thread score juice. */
 export const THROUGH_FLASH_MS = 160;
+/**
+ * ART-SKIM-TICK-JUICE-BUMP-v1 — award-tick juice only (not wall-graze-with-0).
+ * Filament `--thread` rim at full opacity. Window 140–180ms.
+ */
+export const SCORE_TICK_FILAMENT_MS = 160;
+/** Local lip/wall edge → `--pinch-lip-edge` `#B8C0CC`. Window 100–140ms. No teal on walls. */
+export const SCORE_TICK_EDGE_MS = 120;
+/** HUD score punch: ink→thread + slight scale. Arm's-length readable. */
+export const SCORE_TICK_HUD_MS = 120;
 /** Legacy name: center-clean no longer flashes the thread like a score tick. */
 export const CLEAN_PASS_FLASH_MS = THROUGH_FLASH_MS;
 /** Fairness #19 / feel-sanity: no lip closer than this in time. */

@@ -1,7 +1,14 @@
 import type { CanvasHandle } from "./canvas.ts";
 import { withPlayfield } from "./canvas.ts";
-import type { World } from "../world/simulate.ts";
-import { deathPhase, interpDistance, interpX, skimJuice } from "../world/simulate.ts";
+import {
+  deathPhase,
+  interpDistance,
+  interpX,
+  scoreTickEdgeOn,
+  scoreTickFilamentOn,
+  skimJuice,
+  type World,
+} from "../world/simulate.ts";
 import { moverGap, sampleWalls, slabPair } from "../world/course.ts";
 import {
   FIELD_H,
@@ -39,6 +46,12 @@ export const WALL_ART = {
   slabShadePx: 7,
   contactShadowBlur: 6,
   contactShadowAlpha: 0.18,
+} as const;
+
+/** Award-tick tokens. Teal stays thread-only; walls/lips use pinch-lip-edge. */
+export const SCORE_TICK_ART = {
+  filament: THREAD,
+  edge: WALL_ART.pinchLipEdge,
 } as const;
 
 function parseHex(hex: string): [number, number, number] {
@@ -151,6 +164,47 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
   ctx.beginPath();
   right.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
   ctx.stroke();
+
+  drawLocalWallHeat(ctx, world, camera, left, right);
+}
+
+/**
+ * ART-SKIM-TICK-JUICE-BUMP-v1 — local corridor edge under the awarding skim.
+ * `--pinch-lip-edge` only. Never thread/teal on walls.
+ */
+function drawLocalWallHeat(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  camera: number,
+  left: { x: number; sy: number }[],
+  right: { x: number; sy: number }[],
+): void {
+  if (world.reducedMotion || !scoreTickEdgeOn(world) || !world.scoreTickSide) return;
+  const edge = world.scoreTickSide === "left" ? left : right;
+  const lip = world.obstacles.find((o) => o.id === world.scoreTickLipId);
+  const focusSy = worldToScreen(lip?.y ?? camera, camera);
+  const band = 52;
+  ctx.save();
+  ctx.strokeStyle = WALL_ART.pinchLipEdge;
+  ctx.lineWidth = 2.75;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  let started = false;
+  for (const p of edge) {
+    if (Math.abs(p.sy - focusSy) > band) {
+      started = false;
+      continue;
+    }
+    if (!started) {
+      ctx.moveTo(p.x, p.sy);
+      started = true;
+    } else {
+      ctx.lineTo(p.x, p.sy);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Corridor mass: fill + inner-face shade (≤8% toward bg-deep). No gloss/noise. */
@@ -202,7 +256,7 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
     const visualHeat = world.variant === "beat" && !world.reducedMotion ? world.beatHeat : 0;
     const perfect = world.variant === "beat" && world.perfectFlash > 0 && obs.id === world.lastPerfectId;
     const glow = visualHeat * BEAT_GLOW_BLUR_MAX * (perfect ? 1 : isGate ? 0.25 : 0);
-    const style = isGate
+    const base = isGate
       ? {
           fill: perfect ? INK : WALL_ART.pinchLip,
           inner: perfect ? INK : PINCH_LIP_INNER,
@@ -217,9 +271,33 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
           lineWidth: WALL_ART.moverStroke,
           glow: 0,
         };
-    drawCraftedBar(ctx, bars.left, top, style, "left");
-    drawCraftedBar(ctx, bars.right, top, style, "right");
+    drawCraftedBar(ctx, bars.left, top, withScoreTickEdge(world, obs.id, "left", base), "left");
+    drawCraftedBar(ctx, bars.right, top, withScoreTickEdge(world, obs.id, "right", base), "right");
   }
+}
+
+/** Local awarding lip/wall edge → pinch-lip-edge. Never thread/teal. */
+export function withScoreTickEdge(
+  world: World,
+  obsId: number,
+  side: "left" | "right",
+  style: { fill: string; inner: string; edge: string; lineWidth: number; glow?: number },
+): { fill: string; inner: string; edge: string; lineWidth: number; glow?: number } {
+  if (!scoreTickLocalEdgeOn(world, obsId, side)) return style;
+  return {
+    ...style,
+    edge: WALL_ART.pinchLipEdge,
+    lineWidth: Math.max(style.lineWidth, WALL_ART.pinchLipStroke + 1.1),
+  };
+}
+
+export function scoreTickLocalEdgeOn(world: World, obsId: number, side: "left" | "right"): boolean {
+  return (
+    !world.reducedMotion &&
+    scoreTickEdgeOn(world) &&
+    world.scoreTickLipId === obsId &&
+    world.scoreTickSide === side
+  );
 }
 
 function drawCraftedBar(
@@ -308,9 +386,10 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   const dissolve = world.alive || world.cleared ? 0 : phase.dissolve;
   if (dissolve >= 1) return;
 
+  const award = !world.reducedMotion && scoreTickFilamentOn(world) && world.alive;
   const bright = world.nearMissTimer > 0 && world.alive;
   const charged = world.tension > 0 && world.alive;
-  const juice = bright ? skimJuice(world) : 0;
+  const juice = award ? 1 : bright ? skimJuice(world) : 0;
   const scale = beatSkimScale(juice);
   ctx.globalAlpha = 1 - dissolve;
 
@@ -331,19 +410,19 @@ function drawThread(ctx: CanvasRenderingContext2D, world: World, camera: number,
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.shadowColor = THREAD;
-  ctx.shadowBlur = bright ? 30 * scale : charged ? 16 : 12;
-  ctx.strokeStyle = THREAD_DIM;
-  ctx.lineWidth = bright ? 11.5 * scale : 8;
+  ctx.shadowBlur = award ? 36 * scale : bright ? 30 * scale : charged ? 16 : 12;
+  ctx.strokeStyle = award ? THREAD : THREAD_DIM;
+  ctx.lineWidth = award ? 12.5 * scale : bright ? 11.5 * scale : 8;
   ctx.stroke();
-  ctx.strokeStyle = bright ? INK : THREAD;
-  ctx.lineWidth = bright ? 5.2 * scale : 3.4;
+  ctx.strokeStyle = award ? THREAD : bright ? INK : THREAD;
+  ctx.lineWidth = award ? 5.6 * scale : bright ? 5.2 * scale : 3.4;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   const headSy = THREAD_SCREEN_Y;
-  ctx.fillStyle = bright ? INK : THREAD;
+  ctx.fillStyle = award || !bright ? THREAD : INK;
   ctx.beginPath();
-  ctx.arc(x, headSy, bright ? 5.2 * scale : 3.2, 0, Math.PI * 2);
+  ctx.arc(x, headSy, award ? 5.6 * scale : bright ? 5.2 * scale : 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { WALL_ART } from "../render/draw.ts";
-import { GATE_LIP_THICKNESS } from "../world/constants.ts";
+import { SCORE_TICK_ART, WALL_ART } from "../render/draw.ts";
+import {
+  GATE_LIP_THICKNESS,
+  SCORE_TICK_EDGE_MS,
+  SCORE_TICK_FILAMENT_MS,
+  SCORE_TICK_HUD_MS,
+} from "../world/constants.ts";
 
 describe("WALL-MOVER-POLISH-BRIEF-v1 tokens", () => {
   it("locks corridor, lip, and mover palette / stroke / depth", () => {
@@ -25,5 +30,19 @@ describe("WALL-MOVER-POLISH-BRIEF-v1 tokens", () => {
     expect(GATE_LIP_THICKNESS).toBeGreaterThanOrEqual(10);
     expect(GATE_LIP_THICKNESS).toBeLessThanOrEqual(14);
     expect(GATE_LIP_THICKNESS).toBe(12);
+  });
+});
+
+describe("ART-SKIM-TICK-JUICE-BUMP-v1 tokens", () => {
+  it("locks award-tick windows and existing teal / pinch-lip-edge family", () => {
+    expect(SCORE_TICK_FILAMENT_MS).toBeGreaterThanOrEqual(140);
+    expect(SCORE_TICK_FILAMENT_MS).toBeLessThanOrEqual(180);
+    expect(SCORE_TICK_EDGE_MS).toBeGreaterThanOrEqual(100);
+    expect(SCORE_TICK_EDGE_MS).toBeLessThanOrEqual(140);
+    expect(SCORE_TICK_HUD_MS).toBe(120);
+    expect(SCORE_TICK_ART.filament).toBe("#5EEAD4");
+    expect(SCORE_TICK_ART.edge).toBe("#B8C0CC");
+    expect(SCORE_TICK_ART.edge).toBe(WALL_ART.pinchLipEdge);
+    expect(SCORE_TICK_ART.edge).not.toBe(SCORE_TICK_ART.filament);
   });
 });

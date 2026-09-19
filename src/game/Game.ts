@@ -37,7 +37,7 @@ import {
   RESULT_NO_SKIM,
   type ExperimentVariant,
 } from "./variant.ts";
-import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
+import { createWorld, deathPhase, scoreTickHudOn, updateWorld, worldScore, type World } from "./world/simulate.ts";
 import {
   RECURRENCE_LINE,
   isRecurrentCandidate,
@@ -374,7 +374,7 @@ export class Game {
       cleanPasses: world?.cleanPasses ?? 0,
       skimEvents: world?.skimEvents ?? 0,
       throughFlash: Boolean(world && world.throughTimer > 0),
-      scoreTick: Boolean(world?.scoreTickEvent),
+      scoreTick: Boolean(world && scoreTickHudOn(world)),
       noSkimResult:
         (this.screen === "dead" || this.screen === "cleared") && (world?.skimEvents ?? 0) === 0
           ? RESULT_NO_SKIM

@@ -37,6 +37,9 @@ import {
   TENSION_GAIN_LOCK_MS,
   TENSION_HOLD_MS,
   THREAD_RADIUS,
+  SCORE_TICK_EDGE_MS,
+  SCORE_TICK_FILAMENT_MS,
+  SCORE_TICK_HUD_MS,
   THROUGH_FLASH_MS,
   TRAIL_MAX,
 } from "./constants.ts";
@@ -73,6 +76,12 @@ export type World = {
   throughEvent: boolean;
   /** Edge for HUD: skim score ticked this tick. */
   scoreTickEvent: boolean;
+  /** Remaining award-tick juice (filament window). 0 = off. */
+  scoreTickTimer: number;
+  /** Obstacle that cashed this award. 0 = none. */
+  scoreTickLipId: number;
+  /** Local lip/wall side under the awarding skim. */
+  scoreTickSide: "left" | "right" | null;
   perfects: number;
   perfectFlash: number;
   lastPerfectId: number;
@@ -258,6 +267,9 @@ export function createWorld(
     throughTimer: 0,
     throughEvent: false,
     scoreTickEvent: false,
+    scoreTickTimer: 0,
+    scoreTickLipId: 0,
+    scoreTickSide: null,
     perfects: 0,
     perfectFlash: 0,
     lastPerfectId: 0,
@@ -369,6 +381,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   }
   if (world.perfectFlash > 0) world.perfectFlash = Math.max(0, world.perfectFlash - dt);
   if (world.throughTimer > 0) world.throughTimer = Math.max(0, world.throughTimer - dt);
+  if (world.scoreTickTimer > 0) world.scoreTickTimer = Math.max(0, world.scoreTickTimer - dt);
   if (world.variant === "beat") {
     const prevPulse = world.beatPulse;
     world.beatPulse = beatPulseAmp(world.time);
@@ -425,6 +438,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
           world.tension = 0;
           world.tensionTimer = 0;
           world.scoreTickEvent = true;
+          pulseScoreTickJuice(world, obs, gap);
           cue(world, "clean");
         } else {
           // Center-clean: gray "through" only. Not combo food. Score 0.
@@ -520,6 +534,37 @@ function pulseNearMiss(world: World): void {
       world.beatStreak = Math.max(0, world.beatStreak - 1);
     }
   }
+}
+
+/** Latch award-tick juice on the existing scoreTick / throughTimer family. Not a second FX system. */
+function pulseScoreTickJuice(
+  world: World,
+  obs: ObstacleRuntime,
+  gap: { left: number; right: number },
+): void {
+  world.scoreTickTimer = SCORE_TICK_FILAMENT_MS / 1000;
+  world.scoreTickLipId = obs.id;
+  world.scoreTickSide = world.x < (gap.left + gap.right) / 2 ? "left" : "right";
+}
+
+function scoreTickWindowOn(timer: number, holdMs: number): boolean {
+  if (timer <= 0) return false;
+  return timer + 1e-9 >= (SCORE_TICK_FILAMENT_MS - holdMs) / 1000;
+}
+
+/** Filament `--thread` rim at full opacity. 140–180ms after a score-awarding skim. */
+export function scoreTickFilamentOn(world: World): boolean {
+  return scoreTickWindowOn(world.scoreTickTimer, SCORE_TICK_FILAMENT_MS);
+}
+
+/** Local lip/wall edge heat. 100–140ms. Draw uses pinch-lip-edge only. */
+export function scoreTickEdgeOn(world: World): boolean {
+  return scoreTickWindowOn(world.scoreTickTimer, SCORE_TICK_EDGE_MS);
+}
+
+/** HUD score punch hold. 120ms ink→thread. */
+export function scoreTickHudOn(world: World): boolean {
+  return scoreTickWindowOn(world.scoreTickTimer, SCORE_TICK_HUD_MS);
 }
 
 /** Visual near-miss heat. Brake skim uses a modest cap; Beat uses streak heat; Control uses edge skim. */

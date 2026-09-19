@@ -11,7 +11,7 @@ import {
   ROOM_C,
   THREAD_RADIUS,
   TICK,
-  isRoomATeachLip,
+  isRoomALiveOpening,
   openingIncludesCx,
 } from "./constants.ts";
 import { cxFitsMoverGap, isMoverSnapPhase, moverContactTime, moverUnsafeDuration } from "./course.ts";
@@ -31,8 +31,8 @@ export function scoringGates(course: CourseSpec): ObstacleSpec[] {
 
 export function minOffsetForGateY(y: number): number {
   if (y < DIST.openEnd) return 0;
-  if (isRoomATeachLip(y)) return ROOM_A.teachMinOffset;
-  if (y < DIST.roomAEnd) return ROOM_A.minOffset;
+  // First-minute A is CX-live (offset capped). Hard minOffset 80 is Room B+.
+  if (isRoomALiveOpening(y)) return ROOM_A.teachMinOffset;
   if (y < DIST.roomBEnd) return ROOM_B.minOffset;
   if (y < DIST.roomCEnd) return ROOM_C.minOffset;
   return ROOM_B.minOffset;
@@ -58,11 +58,10 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < minOffset ${phaseMin}`);
     }
     const killOff = g.gapWidth / 2 - THREAD_RADIUS;
-    const teach = isRoomATeachLip(g.y);
-    if (teach) {
+    if (isRoomALiveOpening(g.y)) {
       if (!openingIncludesCx(g.left, g.right)) {
         errors.push(
-          `teach gate ${g.id} must include CX (off=${off.toFixed(2)}, killOff=${killOff.toFixed(2)})`,
+          `Room A gate ${g.id} must include CX (off=${off.toFixed(2)}, killOff=${killOff.toFixed(2)})`,
         );
       }
     } else if (g.y >= DIST.openEnd && off <= killOff) {
@@ -101,12 +100,15 @@ export function checkCourseLayout(course: CourseSpec): string[] {
     if (roomB.length < 6) {
       errors.push(`Room B must have at least 6 scoring gates, got ${roomB.length}`);
     }
-    for (const g of roomA) {
-      const teach = isRoomATeachLip(g.y);
-      const lo = teach ? ROOM_A.teachGapMin : ROOM_A.gapMin;
-      const hi = teach ? ROOM_A.teachGapMax : ROOM_A.gapMax;
+    for (const [i, g] of roomA.entries()) {
+      const first = i < ROOM_A.firstCount;
+      const lo = first ? ROOM_A.teachGapMin : ROOM_A.gapMin;
+      const hi = first ? ROOM_A.teachGapMax : ROOM_A.gapMax;
       if (g.gapWidth < lo - 1e-6 || g.gapWidth > hi + 1e-6) {
         errors.push(`Room A gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${lo}–${hi}`);
+      }
+      if (!openingIncludesCx(g.left, g.right)) {
+        errors.push(`Room A gate ${g.id} must include CX`);
       }
     }
     for (const g of roomB) {

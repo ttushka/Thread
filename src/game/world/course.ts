@@ -10,6 +10,7 @@ import {
   KEYFRAME_PAD,
   LIP_TELEGRAPH_MIN_S,
   MOVER_MOTION,
+  NEAR_MISS_BAND,
   NICK_BAND,
   ROOM_A,
   ROOM_B,
@@ -95,7 +96,7 @@ function placeRest(
 /**
  * Scoring gate: forced offset from CX, not prevCenter+wander.
  * Pinch: offset is raised so holding x=CX is a death (not a nick-through).
- * Teach (`cxLive`): offset is *capped* so x=CX stays inside the live pocket.
+ * CX-live: offset is *capped* so x=CX is a clean through (not nick, skim, or death).
  */
 function placeScoringGate(
   rng: Rng,
@@ -111,7 +112,7 @@ function placeScoringGate(
   const gap = rng.float(gapMin, gapMax);
   let off = minOffset + rng.float(0, offJitter);
   if (cxLive) {
-    const liveOff = gap / 2 - THREAD_RADIUS - NICK_BAND - 0.5;
+    const liveOff = gap / 2 - THREAD_RADIUS - NICK_BAND - NEAR_MISS_BAND - 0.5;
     if (off > liveOff) off = Math.max(0, liveOff);
   } else {
     const killOff = gap / 2 - THREAD_RADIUS + 0.5;
@@ -362,9 +363,11 @@ type LipRoom = {
   stepMax: number;
   holdMin?: number;
   holdMax?: number;
-  /** Survivable teach: first N lips and/or y < teachEnd include CX. */
-  teachCount?: number;
-  teachEnd?: number;
+  /**
+   * First-minute Room A: every scoring opening includes CX.
+   * Later Endless A / Room B omit this — those bands CX-kill.
+   */
+  cxLive?: boolean;
   teachGapMin?: number;
   teachGapMax?: number;
   teachMinOffset?: number;
@@ -446,21 +449,31 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
           : lipStep(rng, room.stepMin, room.stepMax);
       const nextY = plannedGateY(step);
       if (nextY >= until) break;
-      const teach =
-        (room.teachCount !== undefined && placed < room.teachCount) ||
-        (room.teachEnd !== undefined && nextY < room.teachEnd);
-      const gapMin = teach ? (room.teachGapMin ?? room.gapMin) : room.gapMin;
-      const gapMax = teach ? (room.teachGapMax ?? room.gapMax) : room.gapMax;
-      const minOff = teach ? (room.teachMinOffset ?? room.minOffset) : room.minOffset;
-      const jitter = teach ? (room.teachOffJitter ?? room.offJitter) : room.offJitter;
-      pushGate(gapMin, gapMax, minOff, jitter, step, teach);
+      // Wide first opening; later first-minute A uses the pinch silhouette
+      // but stays CX-live. Hard kill is Room B+ / later Endless A only.
+      const wideOpen = first && room.teachGapMin !== undefined;
+      const gapMin = wideOpen ? room.teachGapMin! : room.gapMin;
+      const gapMax = wideOpen ? (room.teachGapMax ?? room.teachGapMin!) : room.gapMax;
+      const minOff = wideOpen ? (room.teachMinOffset ?? room.minOffset) : room.minOffset;
+      const jitter = wideOpen ? (room.teachOffJitter ?? room.offJitter) : room.offJitter;
+      pushGate(gapMin, gapMax, minOff, jitter, step, room.cxLive === true);
       placed += 1;
       // Hold only after the first lip + first post-calm lip so Daily/Beat still
-      // fit ≥3 Room A gates under the ≥250 calm gap.
+      // fit ≥3 Room A gates under the ≥250 calm gap. Skip a hold that would
+      // eat the last Room A weave lip (entire A stays CX-live).
       const allowHold = room.firstCount === undefined || placed > room.firstCount + 1;
       if (allowHold && room.holdMin !== undefined && room.holdMax !== undefined) {
-        const hold = rng.float(room.holdMin, room.holdMax);
-        if (y + hold < until) pushHold(hold);
+        const floor = BASE_SPEED * LIP_TELEGRAPH_MIN_S;
+        const nextStepFloor = Math.max(room.stepMin, floor);
+        // Prefer another scoring lip over a hold. First-minute A (cxLive)
+        // uses the worst-case step so the last weave opening still fits.
+        const holdBudget = room.cxLive
+          ? room.holdMax + Math.max(room.stepMax, floor)
+          : room.holdMin + nextStepFloor;
+        if (y + holdBudget < until) {
+          const hold = rng.float(room.holdMin, room.holdMax);
+          if (y + hold < until) pushHold(hold);
+        }
       }
     }
   };
@@ -503,10 +516,10 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
   }
   side = rng.pick([-1, 1] as const);
 
-  // Room A 0–15s: survivable teach — openings include CX. Pinch starts after.
-  fillLipRoom(DIST.roomAEnd, ROOM_A);
+  // Room A 0–15s: every scoring opening includes CX. Hard CX-kill is Room B+.
+  fillLipRoom(DIST.roomAEnd, { ...ROOM_A, cxLive: true });
   if (y < DIST.roomAEnd) {
-    pushRest(ROOM_A.teachGapMin, ROOM_A.teachGapMax, 12, DIST.roomAEnd - y);
+    pushHold(DIST.roomAEnd - y);
   }
 
   // Room B 15–40s: tighter L/R weave corridor. No movers.
@@ -536,7 +549,7 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
       const knob = (segment - 1) % 3;
       const end = Math.min(y + 960, horizon);
       if (knob === 0) {
-        // Later A is hard pinch only — teach/calm knobs stay on the first minute.
+        // Later A is hard pinch only — first-minute CX-live knobs stay off.
         fillLipRoom(end, {
           gapMin: ROOM_A.gapMin,
           gapMax: ROOM_A.gapMax,

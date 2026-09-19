@@ -10,6 +10,7 @@ import {
   KEYFRAME_PAD,
   LIP_TELEGRAPH_MIN_S,
   MOVER_MOTION,
+  NICK_BAND,
   ROOM_A,
   ROOM_B,
   ROOM_C,
@@ -93,7 +94,8 @@ function placeRest(
 
 /**
  * Scoring gate: forced offset from CX, not prevCenter+wander.
- * Offset is raised if needed so holding x=CX is a death (not a nick-through).
+ * Pinch: offset is raised so holding x=CX is a death (not a nick-through).
+ * Teach (`cxLive`): offset is *capped* so x=CX stays inside the live pocket.
  */
 function placeScoringGate(
   rng: Rng,
@@ -104,11 +106,17 @@ function placeScoringGate(
   offJitter: number,
   side: number,
   nextId: () => number,
+  cxLive = false,
 ): { kf: WallKeyframe; center: number; spec: ObstacleSpec } {
   const gap = rng.float(gapMin, gapMax);
   let off = minOffset + rng.float(0, offJitter);
-  const killOff = gap / 2 - THREAD_RADIUS + 0.5;
-  if (off < killOff) off = killOff;
+  if (cxLive) {
+    const liveOff = gap / 2 - THREAD_RADIUS - NICK_BAND - 0.5;
+    if (off > liveOff) off = Math.max(0, liveOff);
+  } else {
+    const killOff = gap / 2 - THREAD_RADIUS + 0.5;
+    if (off < killOff) off = killOff;
+  }
   const { minCenter, maxCenter } = tunnelBounds(gap);
   const center = clamp(CX + side * off, minCenter, maxCenter);
   const left = center - gap / 2;
@@ -354,8 +362,13 @@ type LipRoom = {
   stepMax: number;
   holdMin?: number;
   holdMax?: number;
-  firstGapMin?: number;
-  firstGapMax?: number;
+  /** Survivable teach: first N lips and/or y < teachEnd include CX. */
+  teachCount?: number;
+  teachEnd?: number;
+  teachGapMin?: number;
+  teachGapMax?: number;
+  teachMinOffset?: number;
+  teachOffJitter?: number;
   firstCount?: number;
   firstStepMin?: number;
   firstStepMax?: number;
@@ -399,6 +412,7 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     minOffset: number,
     offJitter: number,
     dy: number,
+    cxLive = false,
   ) => {
     if (beat) {
       y = quantizeLipY(y + dy, lastLipY);
@@ -406,7 +420,7 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     } else {
       y += dy;
     }
-    const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId);
+    const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId, cxLive);
     side = -side as -1 | 1;
     center = placed.center;
     keyframes.push(placed.kf);
@@ -419,23 +433,29 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     let placed = 0;
     while (y < until) {
       const first = room.firstCount !== undefined && placed < room.firstCount;
-      const afterTeach =
+      const afterFirst =
         room.firstCount !== undefined &&
         placed === room.firstCount &&
         room.calmGapMin !== undefined;
-      // Opening teach may sit close after openEnd. Later A segments still have a
+      // First lip may sit close after openEnd. Later A segments still have a
       // previous scoring lip, so they keep #19's 0.6s floor.
-      const step = afterTeach
+      const step = afterFirst
         ? lipStep(rng, room.calmGapMin!, room.calmGapMax ?? room.calmGapMin!)
         : first && room.firstStepMin !== undefined && lastLipY <= 0
           ? rng.float(room.firstStepMin, room.firstStepMax ?? room.firstStepMin)
           : lipStep(rng, room.stepMin, room.stepMax);
-      if (plannedGateY(step) >= until) break;
-      const gapMin = first ? (room.firstGapMin ?? room.gapMin) : room.gapMin;
-      const gapMax = first ? (room.firstGapMax ?? room.gapMax) : room.gapMax;
-      pushGate(gapMin, gapMax, room.minOffset, room.offJitter, step);
+      const nextY = plannedGateY(step);
+      if (nextY >= until) break;
+      const teach =
+        (room.teachCount !== undefined && placed < room.teachCount) ||
+        (room.teachEnd !== undefined && nextY < room.teachEnd);
+      const gapMin = teach ? (room.teachGapMin ?? room.gapMin) : room.gapMin;
+      const gapMax = teach ? (room.teachGapMax ?? room.gapMax) : room.gapMax;
+      const minOff = teach ? (room.teachMinOffset ?? room.minOffset) : room.minOffset;
+      const jitter = teach ? (room.teachOffJitter ?? room.offJitter) : room.offJitter;
+      pushGate(gapMin, gapMax, minOff, jitter, step, teach);
       placed += 1;
-      // Hold only after the teach + first post-calm lip so Daily/Beat still
+      // Hold only after the first lip + first post-calm lip so Daily/Beat still
       // fit ≥3 Room A gates under the ≥250 calm gap.
       const allowHold = room.firstCount === undefined || placed > room.firstCount + 1;
       if (allowHold && room.holdMin !== undefined && room.holdMax !== undefined) {
@@ -483,10 +503,10 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
   }
   side = rng.pick([-1, 1] as const);
 
-  // Room A 0–15s: wide pinch teach — CX is dead; weave to skim.
+  // Room A 0–15s: survivable teach — openings include CX. Pinch starts after.
   fillLipRoom(DIST.roomAEnd, ROOM_A);
   if (y < DIST.roomAEnd) {
-    pushRest(ROOM_A.gapMin, ROOM_A.gapMax, 12, DIST.roomAEnd - y);
+    pushRest(ROOM_A.teachGapMin, ROOM_A.teachGapMax, 12, DIST.roomAEnd - y);
   }
 
   // Room B 15–40s: tighter L/R weave corridor. No movers.
@@ -516,7 +536,7 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
       const knob = (segment - 1) % 3;
       const end = Math.min(y + 960, horizon);
       if (knob === 0) {
-        // Later A is v2 weave only — opening teach/calm knobs stay on the first minute.
+        // Later A is hard pinch only — teach/calm knobs stay on the first minute.
         fillLipRoom(end, {
           gapMin: ROOM_A.gapMin,
           gapMax: ROOM_A.gapMax,

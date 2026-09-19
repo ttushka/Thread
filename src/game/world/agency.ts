@@ -11,6 +11,8 @@ import {
   ROOM_C,
   THREAD_RADIUS,
   TICK,
+  isRoomATeachLip,
+  openingIncludesCx,
 } from "./constants.ts";
 import { cxFitsMoverGap, isMoverSnapPhase, moverContactTime, moverUnsafeDuration } from "./course.ts";
 import { createWorld, updateWorld, type World } from "./simulate.ts";
@@ -29,6 +31,7 @@ export function scoringGates(course: CourseSpec): ObstacleSpec[] {
 
 export function minOffsetForGateY(y: number): number {
   if (y < DIST.openEnd) return 0;
+  if (isRoomATeachLip(y)) return ROOM_A.teachMinOffset;
   if (y < DIST.roomAEnd) return ROOM_A.minOffset;
   if (y < DIST.roomBEnd) return ROOM_B.minOffset;
   if (y < DIST.roomCEnd) return ROOM_C.minOffset;
@@ -55,7 +58,14 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < minOffset ${phaseMin}`);
     }
     const killOff = g.gapWidth / 2 - THREAD_RADIUS;
-    if (g.y >= DIST.openEnd && off <= killOff) {
+    const teach = isRoomATeachLip(g.y);
+    if (teach) {
+      if (!openingIncludesCx(g.left, g.right)) {
+        errors.push(
+          `teach gate ${g.id} must include CX (off=${off.toFixed(2)}, killOff=${killOff.toFixed(2)})`,
+        );
+      }
+    } else if (g.y >= DIST.openEnd && off <= killOff) {
       errors.push(`scoring gate ${g.id} still covers CX (off=${off.toFixed(2)}, need > ${killOff.toFixed(2)})`);
     }
   }
@@ -92,8 +102,9 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       errors.push(`Room B must have at least 6 scoring gates, got ${roomB.length}`);
     }
     for (const g of roomA) {
-      const lo = ROOM_A.gapMin;
-      const hi = Math.max(ROOM_A.gapMax, ROOM_A.firstGapMax);
+      const teach = isRoomATeachLip(g.y);
+      const lo = teach ? ROOM_A.teachGapMin : ROOM_A.gapMin;
+      const hi = teach ? ROOM_A.teachGapMax : ROOM_A.gapMax;
       if (g.gapWidth < lo - 1e-6 || g.gapWidth > hi + 1e-6) {
         errors.push(`Room A gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${lo}–${hi}`);
       }

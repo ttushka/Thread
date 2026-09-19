@@ -18,12 +18,14 @@ describe("score", () => {
     expect(THROUGH_AWARD).toBe(0);
   });
 
-  it("is floor(distance × (1 + 0.25 × comboPeak)) + skimCash after a skim", () => {
-    expect(skimMultiplier(1, 0)).toBe(1);
+  it("is floor(distance × (1 + 0.25 × comboPeak)) + skimCash after a skim-gated lip", () => {
+    expect(skimMultiplier(1, 0)).toBe(0);
+    expect(skimMultiplier(1, 1)).toBe(1 + SKIM_MULT_PER_COMBO);
     expect(skimMultiplier(1, 2)).toBe(1 + SKIM_MULT_PER_COMBO * 2);
     expect(computeScore(100, 150, 2, 1)).toBe(Math.floor(100 * 1.5) + 150);
     expect(computeScore(512.2, 50, 4, 3)).toBe(Math.floor(512.2 * 2) + 50);
-    expect(computeScore(10.9, 0, 0, 1)).toBe(10);
+    expect(computeScore(10.9, 0, 0, 1)).toBe(0);
+    expect(computeScore(10.9, 0, 1, 1)).toBe(Math.floor(10.9 * 1.25));
   });
 
   it("does not pay Perfect style — Beat Perfect is juice only", () => {

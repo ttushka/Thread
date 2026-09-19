@@ -7,7 +7,8 @@
  * the distance multiplier; they do not pay style until a skim-gated lip.
  *
  * score = floor(distance × skimMultiplier) + skimCash
- * skimMultiplier is 0 until the first skim event, then 1 + 0.25 × comboPeak.
+ * skimMultiplier is 0 until a skim-gated lip (comboPeak ≥ 1), then 1 + 0.25 × comboPeak.
+ * Wall skims unlock Tension / skimEvents but do not bank distance alone.
  * Combo climbs only on skim-gated lips. Beat Perfect is juice / heat only.
  */
 
@@ -35,15 +36,15 @@ export function cleanPassAward(tensionStacks: number): number {
   return skimAward(tensionStacks);
 }
 
-/** 0 with no skims so a center-clean run scores like failure. */
+/** 0 until a skim-gated lip so a graze or center-clean run scores like failure. */
 export function skimMultiplier(skimEvents: number, comboPeak: number): number {
-  if (skimEvents <= 0) return 0;
-  return 1 + SKIM_MULT_PER_COMBO * Math.max(0, comboPeak);
+  if (skimEvents <= 0 || comboPeak <= 0) return 0;
+  return 1 + SKIM_MULT_PER_COMBO * comboPeak;
 }
 
 /**
  * score = floor(distance × skimMultiplier) + skimCash
- * `skimEvents` gates distance. Perfect style is not in this formula.
+ * Distance pays only after a skim-gated lip. Perfect style is not in this formula.
  */
 export function computeScore(
   distance: number,

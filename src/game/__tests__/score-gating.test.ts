@@ -163,6 +163,7 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — score gating", () => {
     expect(world.combo).toBe(1);
     expect(world.skimCash).toBe(skimAward(1));
     expect(world.skimEvents).toBeGreaterThan(0);
+    expect(world.comboPeak).toBe(1);
     expect(worldScore(world)).toBe(
       computeScore(world.distance, world.skimCash, world.comboPeak, world.skimEvents),
     );
@@ -199,16 +200,15 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — score gating", () => {
     expect(world.particles.length).toBeGreaterThan(0);
   });
 
-  it("unlocks distance scoring on a wall skim and leaves combo for skim-gated lips", () => {
+  it("does not bank distance on a wall skim until a skim-gated lip", () => {
     const world = worldWithGates(118, []);
     world.course.keyframes = wideCorridor(100, 260);
     updateWorld(world, hold(118), TICK);
     expect(world.skimEvents).toBe(1);
     expect(world.combo).toBe(0);
     expect(world.tension).toBe(1);
-    expect(world.scoreTickEvent).toBe(true);
-    expect(worldScore(world)).toBe(Math.floor(world.distance));
-    expect(worldScore(world)).toBeGreaterThan(0);
+    expect(world.scoreTickEvent).toBe(false);
+    expect(worldScore(world)).toBe(0);
   });
 });
 

@@ -504,7 +504,6 @@ function pulseNearMiss(world: World): void {
   world.nearMissTimer = NEAR_MISS_MS / 1000;
   world.edgeSkimPulse = true;
   world.skimEvents += 1;
-  world.scoreTickEvent = true;
   const brakingSkim = world.variant === "brake" && world.braking;
   if (brakingSkim) {
     world.brakeSkimEvent = true;

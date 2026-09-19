@@ -86,16 +86,43 @@ body {
 
 .hud-score {
   margin: 0;
-  font-size: 20px;
-  font-weight: 560;
+  font-size: 32px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
   color: var(--ink);
+  line-height: 1;
+  transform-origin: top right;
+}
+
+.hud-score.empty {
+  color: var(--ink-muted);
+  font-weight: 560;
+}
+
+.hud-score.tick {
+  color: var(--thread);
+}
+
+.hud-through {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  font-weight: 500;
 }
 
 .hud-combo {
   position: absolute;
-  top: 44px;
+  top: 56px;
   right: 16px;
   color: var(--thread-dim);
+}
+
+.hud-combo.has-through {
+  top: 74px;
 }
 
 .hud-variant {
@@ -373,6 +400,21 @@ h2 {
 .brake-btn.dragging {
   cursor: grabbing;
   border-color: var(--thread-dim);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud-score.tick {
+    animation: hud-score-tick 180ms ease-out;
+  }
+}
+
+@keyframes hud-score-tick {
+  0% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

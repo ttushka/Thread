@@ -3,6 +3,7 @@ import {
   SAVE_KEY,
   BRAKE_SKIM_TEACH_KEY,
   BEAT_SKIM_TEACH_KEY,
+  SKIM_SCORE_TEACH_KEY,
   dailyAttemptsFor,
   dailyBestFor,
   loadSave,
@@ -17,6 +18,8 @@ import {
   markBrakeSkimTeachSeen,
   beatSkimTeachSeen,
   markBeatSkimTeachSeen,
+  skimScoreTeachSeen,
+  markSkimScoreTeachSeen,
   writeSave,
   type StorageLike,
 } from "../persistence.ts";
@@ -145,5 +148,19 @@ describe("thread.v1 persistence", () => {
     expect(beatSkimTeachSeen(s)).toBe(true);
     s.setItem(BEAT_SKIM_TEACH_KEY, "");
     expect(beatSkimTeachSeen(s)).toBe(false);
+  });
+
+  it("persists first-run score teach as a dedicated key, independent of thread.v1", () => {
+    const s = new MemoryStorage();
+    expect(SKIM_SCORE_TEACH_KEY).toBe("thread.v1.skimScoreTeachSeen");
+    expect(skimScoreTeachSeen(s)).toBe(false);
+    markSkimScoreTeachSeen(s);
+    expect(s.getItem(SKIM_SCORE_TEACH_KEY)).toBe("1");
+    expect(skimScoreTeachSeen(s)).toBe(true);
+    expect(s.getItem(SAVE_KEY)).toBeNull();
+    expect(s.getItem(BRAKE_SKIM_TEACH_KEY)).toBeNull();
+    expect(s.getItem(BEAT_SKIM_TEACH_KEY)).toBeNull();
+    s.setItem(SKIM_SCORE_TEACH_KEY, "");
+    expect(skimScoreTeachSeen(s)).toBe(false);
   });
 });

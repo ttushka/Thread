@@ -4,7 +4,6 @@ import { dailySeed } from "../seed.ts";
 import { hitObstacle } from "../world/collision.ts";
 import {
   BASE_SPEED,
-  CLEAN_PASS_FLASH_MS,
   CX,
   DIST,
   FIELD_W,
@@ -14,6 +13,7 @@ import {
   POINTER_LERP,
   STEER_SPEED,
   TICK,
+  THROUGH_FLASH_MS,
 } from "../world/constants.ts";
 import { generateCourse, slabPair } from "../world/course.ts";
 import { createWorld, updateWorld } from "../world/simulate.ts";
@@ -135,35 +135,33 @@ describe("pinch readability — lip contact", () => {
   });
 });
 
-describe("pinch readability — Clean Pass juice", () => {
-  it("flashes the thread 80–120ms, ticks combo, and sparks at the gap center", () => {
+describe("pinch readability — through is not combo food", () => {
+  it("shows a gray through flash and does not tick combo or thread juice", () => {
     const gate = gateSpec();
     const x = (gate.left + gate.right) / 2;
     const { world } = worldWithGate({ reducedMotion: false, x, gate });
     tickUntil(world, x, () => world.cleanPasses >= 1);
     expect(world.alive).toBe(true);
     expect(world.cleanPasses).toBe(1);
-    expect(world.combo).toBe(1);
-    expect(world.nearMissTimer).toBeGreaterThanOrEqual(0.08);
-    expect(world.nearMissTimer).toBeLessThanOrEqual(0.12);
-    expect(world.nearMissTimer).toBeCloseTo(CLEAN_PASS_FLASH_MS / 1000, 5);
-    expect(world.particles.length).toBeGreaterThan(0);
-    const gapCenter = (gate.left + gate.right) / 2;
-    for (const p of world.particles) {
-      expect(Math.abs(p.x - gapCenter)).toBeLessThan(0.01);
-    }
+    expect(world.combo).toBe(0);
+    expect(world.skimCash).toBe(0);
+    expect(world.skimEvents).toBe(0);
+    expect(world.throughTimer).toBeCloseTo(THROUGH_FLASH_MS / 1000, 5);
+    expect(world.nearMissTimer).toBe(0);
+    expect(world.particles).toEqual([]);
     expect(world.tension).toBe(0);
   });
 
-  it("skips flash and particles under reduced motion (combo still ticks)", () => {
+  it("still marks through under reduced motion without juice", () => {
     const gate = gateSpec();
     const x = (gate.left + gate.right) / 2;
     const { world } = worldWithGate({ reducedMotion: true, x, gate });
     tickUntil(world, x, () => world.cleanPasses >= 1);
     expect(world.cleanPasses).toBe(1);
-    expect(world.combo).toBe(1);
+    expect(world.combo).toBe(0);
     expect(world.nearMissTimer).toBe(0);
     expect(world.particles).toEqual([]);
+    expect(world.throughTimer).toBeCloseTo(THROUGH_FLASH_MS / 1000, 5);
   });
 });
 

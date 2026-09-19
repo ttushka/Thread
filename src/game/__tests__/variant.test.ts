@@ -18,6 +18,8 @@ import {
   beatBedGain,
   beatSkimParticleCount,
   beatSkimScale,
+  SCORE_SKIM_TEACH,
+  RESULT_NO_SKIM,
 } from "../variant.ts";
 import { dailySeed, SEED_VERSION } from "../seed.ts";
 import { generateCourse, streamEvents } from "../world/course.ts";
@@ -52,6 +54,8 @@ describe("parseVariant", () => {
   });
 
   it("locks Design teach copy for every live variant", () => {
+    expect(SCORE_SKIM_TEACH).toBe("Score lives on the skim.");
+    expect(RESULT_NO_SKIM).toBe("No skims — try the edge.");
     expect(VARIANT_TEACH.control).toBe(CONTROL_TEACH);
     expect(EXPERIMENT_TEACH_COPY.control).toBe(CONTROL_TEACH);
     expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");

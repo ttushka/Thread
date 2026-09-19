@@ -86,13 +86,21 @@ describe("sfx cues", () => {
     expect(take(world).filter((c) => c === "nick")).toEqual([]);
   });
 
-  it("emits clean once per clean pass, not every frame", () => {
+  it("emits clean once per skim-gated lip, not on a center-clean through", () => {
     const gate = gateSpec();
     const mid = (gate.left + gate.right) / 2;
     const world = worldWithGates(mid, [gate]);
     tickUntil(world, mid, () => world.cleanPasses >= 1);
+    expect(take(world).filter((c) => c === "clean")).toEqual([]);
+
+    const skim = gateSpec({ id: 2, y: world.distance + 80 });
+    const nearX = skim.left + 5 + 14;
+    world.obstacles.push({ ...skim, passed: false, nicked: false, skimmed: false });
+    world.x = nearX;
+    world.prevX = nearX;
+    tickUntil(world, nearX, () => world.obstacles[1]!.passed);
     expect(take(world).filter((c) => c === "clean")).toEqual(["clean"]);
-    for (let i = 0; i < 8; i++) updateWorld(world, hold(mid), TICK);
+    for (let i = 0; i < 8; i++) updateWorld(world, hold(nearX), TICK);
     expect(take(world).filter((c) => c === "clean")).toEqual([]);
   });
 

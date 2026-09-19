@@ -8,7 +8,7 @@ import {
   LANE_LERP_MS,
   LANE_X,
 } from "../variant.ts";
-import { CLEAN_AWARD, computeScore } from "../score.ts";
+import { computeScore } from "../score.ts";
 import {
   BASE_SPEED,
   DIST,
@@ -160,7 +160,7 @@ describe("feel-sanity 4 — Perfect windows touch vs keyboard", () => {
     expect(msToNearestBeat(period)).toBeCloseTo(0, 6);
   });
 
-  it("awards Perfect +25 on a beat-center clean pass (keyboard window)", () => {
+  it("still Perfects a beat-center lip but does not pay like a skim", () => {
     const y = beatDistance() * Math.ceil((DIST.openEnd + 80) / beatDistance());
     const gate = gateSpec({ y, left: 100, right: 260, baseCenter: 180, gapWidth: 160 });
     const world = worldWith("beat", 180, [gate]);
@@ -170,8 +170,13 @@ describe("feel-sanity 4 — Perfect windows touch vs keyboard", () => {
     updateWorld(world, { ...idle, touchScoring: false }, TICK);
     expect(world.cleanPasses).toBe(1);
     expect(world.perfects).toBe(1);
-    expect(worldScore(world)).toBe(computeScore(world.distance, world.cleanAward, world.comboPeak, 1));
-    expect(world.cleanAward).toBe(CLEAN_AWARD);
+    expect(world.combo).toBe(0);
+    expect(world.skimCash).toBe(0);
+    expect(world.skimEvents).toBe(0);
+    expect(worldScore(world)).toBe(0);
+    expect(worldScore(world)).toBe(
+      computeScore(world.distance, world.skimCash, world.comboPeak, world.skimEvents),
+    );
   });
 
   it("withholds Perfect when crossing 110ms off the beat on keyboard", () => {

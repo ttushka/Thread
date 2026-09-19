@@ -5,6 +5,8 @@ export const SAVE_KEY = "thread.v1";
 export const BRAKE_SKIM_TEACH_KEY = "thread.v1.brakeSkimTeachSeen";
 /** One-time Beat skim-on-pulse teach. Survives runs; cleared only by a settings wipe. */
 export const BEAT_SKIM_TEACH_KEY = "thread.v1.beatSkimTeachSeen";
+/** One-time score-lives-on-the-skim teach. Survives runs; cleared only by a settings wipe. */
+export const SKIM_SCORE_TEACH_KEY = "thread.v1.skimScoreTeachSeen";
 
 const EMPTY: ThreadSaveV1 = {
   v: 1,
@@ -109,6 +111,24 @@ export function markBeatSkimTeachSeen(storage: StorageLike | null | undefined): 
   if (!storage) return;
   try {
     storage.setItem(BEAT_SKIM_TEACH_KEY, "1");
+  } catch {
+    // Quota / private mode — teach may reappear this session.
+  }
+}
+
+export function skimScoreTeachSeen(storage: StorageLike | null | undefined): boolean {
+  if (!storage) return false;
+  try {
+    return storage.getItem(SKIM_SCORE_TEACH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markSkimScoreTeachSeen(storage: StorageLike | null | undefined): void {
+  if (!storage) return;
+  try {
+    storage.setItem(SKIM_SCORE_TEACH_KEY, "1");
   } catch {
     // Quota / private mode — teach may reappear this session.
   }

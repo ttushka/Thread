@@ -5,6 +5,7 @@ import {
   BRAKE_SKIM_TEACH_KEY,
   brakeSkimTeachSeen,
   markBrakeSkimTeachSeen,
+  markSkimScoreTeachSeen,
   type StorageLike,
 } from "../persistence.ts";
 import {
@@ -93,8 +94,8 @@ describe("BRAKE-SKIM-NARRATIVE-v1 tokens", () => {
     expect(brakeSkimTeachOpacity(3)).toBe(1);
     expect(brakeSkimTeachOpacity(3.25)).toBeCloseTo(0.5, 5);
     expect(brakeSkimTeachOpacity(3.5)).toBe(0);
-    expect(BRAKE_SKIM_HEAT).toBe(0.5);
-    expect(CONTROL_SKIM_HEAT).toBe(0.35);
+    expect(BRAKE_SKIM_HEAT).toBe(0.72);
+    expect(CONTROL_SKIM_HEAT).toBe(0.55);
     expect(CONTROL_SKIM_HEAT).toBeLessThan(BRAKE_SKIM_HEAT);
     expect(brakeSkimScale()).toBe(beatSkimScale(BRAKE_SKIM_HEAT));
     expect(brakeSkimScale()).toBeGreaterThan(1);
@@ -198,6 +199,7 @@ describe("BRAKE-SKIM-NARRATIVE-v1 teach", () => {
   it("does not re-show after the flag is set, including a new session", () => {
     const storage = new MemoryStorage();
     markBrakeSkimTeachSeen(storage);
+    markSkimScoreTeachSeen(storage);
     const game = skimBrakeGame(storage);
     expect(game.snapshot().teach).toBe(VARIANT_TEACH.brake);
     expect(game.snapshot().teachOpacity).toBe(1);
@@ -235,6 +237,7 @@ describe("BRAKE-SKIM-NARRATIVE-v1 teach", () => {
 
   it("does not fire teach or flag on Control", () => {
     const storage = new MemoryStorage();
+    markSkimScoreTeachSeen(storage);
     const game = new Game(storage, { endlessSeed: 1, variant: "control" });
     game.startEndless();
     const world = game.world!;

@@ -3,6 +3,8 @@ import type { ThreadSaveV1 } from "../types.ts";
 export const SAVE_KEY = "thread.v1";
 /** One-time Brake skim teach. Survives runs; cleared only by a settings wipe. */
 export const BRAKE_SKIM_TEACH_KEY = "thread.v1.brakeSkimTeachSeen";
+/** One-time Beat skim-on-pulse teach. Survives runs; cleared only by a settings wipe. */
+export const BEAT_SKIM_TEACH_KEY = "thread.v1.beatSkimTeachSeen";
 
 const EMPTY: ThreadSaveV1 = {
   v: 1,
@@ -89,6 +91,24 @@ export function markBrakeSkimTeachSeen(storage: StorageLike | null | undefined):
   if (!storage) return;
   try {
     storage.setItem(BRAKE_SKIM_TEACH_KEY, "1");
+  } catch {
+    // Quota / private mode — teach may reappear this session.
+  }
+}
+
+export function beatSkimTeachSeen(storage: StorageLike | null | undefined): boolean {
+  if (!storage) return false;
+  try {
+    return storage.getItem(BEAT_SKIM_TEACH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markBeatSkimTeachSeen(storage: StorageLike | null | undefined): void {
+  if (!storage) return;
+  try {
+    storage.setItem(BEAT_SKIM_TEACH_KEY, "1");
   } catch {
     // Quota / private mode — teach may reappear this session.
   }

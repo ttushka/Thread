@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { Intent, ObstacleSpec } from "../../types.ts";
+import { Game } from "../Game.ts";
+import {
+  BEAT_SKIM_TEACH_KEY,
+  beatSkimTeachSeen,
+  markBeatSkimTeachSeen,
+  type StorageLike,
+} from "../persistence.ts";
 import { CLEAN_AWARD, cleanPassAward } from "../score.ts";
-import { BEAT_SKIM_MS, BEAT_PULSE_SCALE_MAX, beatIntensityFromStreak, beatSkimParticleCount, beatSkimScale } from "../variant.ts";
+import {
+  BEAT_SKIM_MS,
+  BEAT_SKIM_TEACH,
+  BEAT_SKIM_TEACH_S,
+  BEAT_PULSE_SCALE_MAX,
+  VARIANT_TEACH,
+  beatIntensityFromStreak,
+  beatSkimParticleCount,
+  beatSkimScale,
+  beatSkimTeachOpacity,
+} from "../variant.ts";
 import {
   BASE_SPEED,
   DIST,
@@ -95,6 +112,7 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     const world = skimWall("beat", 0);
     expect(world.tension).toBe(1);
     expect(world.nearMissTimer).toBeGreaterThan(0);
+    expect(world.beatSkimEvent).toBe(true);
     expect(world.beatStreak).toBe(1);
     expect(world.beatHeat).toBeCloseTo(beatIntensityFromStreak(1), 8);
     expect(msToNearestBeat(world.time)).toBeLessThanOrEqual(BEAT_SKIM_MS);
@@ -146,10 +164,24 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.beatHeat).toBeCloseTo(beatIntensityFromStreak(1), 8);
   });
 
+  it("does not latch a skim-teach event on a centered Perfect with no near-miss", () => {
+    const y = beatDistance() * Math.ceil((DIST.openEnd + 80) / beatDistance());
+    const world = worldWith("beat", 180, [onBeatGate(1, y)]);
+    world.x = 180;
+    world.prevX = 180;
+    crossAt(world, y);
+    expect(world.cleanPasses).toBe(1);
+    expect(world.perfects).toBe(1);
+    expect(world.beatStreak).toBe(1);
+    expect(world.nearMissTimer).toBe(0);
+    expect(world.beatSkimEvent).toBe(false);
+  });
+
   it("does not credit a near-miss outside ±180ms", () => {
     const world = skimWall("beat", BEAT_SKIM_MS / 1000 + 0.02);
     expect(world.tension).toBe(1);
     expect(world.nearMissTimer).toBeGreaterThan(0);
+    expect(world.beatSkimEvent).toBe(false);
     expect(world.beatStreak).toBe(0);
     expect(world.beatHeat).toBe(0);
     expect(msToNearestBeat(world.time)).toBeGreaterThan(BEAT_SKIM_MS);
@@ -161,6 +193,7 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
       expect(world.tension).toBe(1);
       expect(world.beatStreak).toBe(0);
       expect(world.beatHeat).toBe(0);
+      expect(world.beatSkimEvent).toBe(false);
       expect(world.perfects).toBe(0);
     }
   });
@@ -202,5 +235,147 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(control.particles).toHaveLength(beatSkimParticleCount(0));
     expect(control.beatStreak).toBe(0);
     expect(control.distance).toBeCloseTo(cold.distance, 8);
+  });
+});
+
+class MemoryStorage implements StorageLike {
+  private data = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.data.has(key) ? this.data.get(key)! : null;
+  }
+  setItem(key: string, value: string): void {
+    this.data.set(key, value);
+  }
+}
+
+function skimBeatGame(storage: StorageLike | null, extra: Partial<Intent> = {}) {
+  const game = new Game(storage, { endlessSeed: 1, variant: "beat" });
+  game.startEndless();
+  const world = game.world!;
+  world.course.keyframes = wideCorridor(100, 260);
+  world.obstacles = [];
+  world.distance = DIST.openEnd + 4;
+  world.prevDistance = world.distance;
+  world.x = 118;
+  world.prevX = 118;
+  world.time = 0;
+  game.tick({ ...hold(118), ...extra }, TICK);
+  return game;
+}
+
+describe("BEAT-TEACH-SKIM-ON-PULSE-v1 tokens", () => {
+  it("locks picker copy, one-time craft line, flag, and fade", () => {
+    expect(VARIANT_TEACH.beat).toBe("Skim the wall on the pulse \u2014 that\u2019s the craft. Click optional.");
+    expect(BEAT_SKIM_TEACH).toBe("Skim on the pulse \u2014 that\u2019s the craft.");
+    expect(BEAT_SKIM_TEACH_KEY).toBe("thread.v1.beatSkimTeachSeen");
+    expect(BEAT_SKIM_TEACH_S).toBeCloseTo(3.5, 8);
+    expect(beatSkimTeachOpacity(0)).toBe(1);
+    expect(beatSkimTeachOpacity(3)).toBe(1);
+    expect(beatSkimTeachOpacity(3.25)).toBeCloseTo(0.5, 5);
+    expect(beatSkimTeachOpacity(3.5)).toBe(0);
+    expect(VARIANT_TEACH.beat).not.toMatch(/wrong|missed/i);
+    expect(BEAT_SKIM_TEACH).not.toMatch(/wrong|missed/i);
+    expect(VARIANT_TEACH.control).toBe("Steer through the lips. Don’t touch the walls.");
+    expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");
+  });
+});
+
+describe("BEAT-TEACH-SKIM-ON-PULSE-v1 teach", () => {
+  it("shows the fade line once, then sets the localStorage flag", () => {
+    const storage = new MemoryStorage();
+    const game = skimBeatGame(storage);
+    const snap = game.snapshot();
+    expect(snap.variant).toBe("beat");
+    expect(snap.teach).toBe(BEAT_SKIM_TEACH);
+    expect(snap.teachOpacity).toBe(1);
+    expect(game.world!.beatStreak).toBe(1);
+    expect(storage.getItem(BEAT_SKIM_TEACH_KEY)).toBe("1");
+    expect(beatSkimTeachSeen(storage)).toBe(true);
+
+    for (let i = 0; i < Math.round(3 / TICK); i++) game.tick(hold(180), TICK);
+    expect(game.snapshot().teach).toBe(BEAT_SKIM_TEACH);
+    expect(game.snapshot().teachOpacity).toBe(1);
+
+    for (let i = 0; i < Math.round(0.6 / TICK); i++) game.tick(hold(180), TICK);
+    expect(game.snapshot().teachOpacity).toBe(0);
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.beat);
+  });
+
+  it("does not re-show after the flag is set, including a new session", () => {
+    const storage = new MemoryStorage();
+    markBeatSkimTeachSeen(storage);
+    const game = skimBeatGame(storage);
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.beat);
+    expect(game.snapshot().teachOpacity).toBe(1);
+    expect(game.world!.beatSkimEvent).toBe(false);
+    expect(game.world!.beatStreak).toBe(1);
+
+    const again = skimBeatGame(storage);
+    expect(again.snapshot().teach).toBe(VARIANT_TEACH.beat);
+    expect(again.snapshot().teach).not.toBe(BEAT_SKIM_TEACH);
+    expect(storage.getItem(BEAT_SKIM_TEACH_KEY)).toBe("1");
+  });
+
+  it("still teaches under mute and reduced motion", () => {
+    const storage = new MemoryStorage();
+    const game = new Game(storage, { endlessSeed: 1, variant: "beat" });
+    game.toggleMuted();
+    game.toggleReducedMotion();
+    game.startEndless();
+    const world = game.world!;
+    world.course.keyframes = wideCorridor(100, 260);
+    world.obstacles = [];
+    world.distance = DIST.openEnd + 4;
+    world.prevDistance = world.distance;
+    world.x = 118;
+    world.prevX = 118;
+    world.time = 0;
+    game.tick(hold(118), TICK);
+    expect(game.snapshot().muted).toBe(true);
+    expect(game.snapshot().reducedMotion).toBe(true);
+    expect(game.snapshot().teach).toBe(BEAT_SKIM_TEACH);
+    expect(game.snapshot().teachOpacity).toBe(1);
+    expect(world.particles).toHaveLength(0);
+    expect(storage.getItem(BEAT_SKIM_TEACH_KEY)).toBe("1");
+  });
+
+  it("does not fire teach or flag on Control, Brake, or an off-pulse skim", () => {
+    const storage = new MemoryStorage();
+    for (const variant of ["control", "brake"] as const) {
+      const game = new Game(storage, { endlessSeed: 1, variant });
+      game.startEndless();
+      const world = game.world!;
+      world.course.keyframes = wideCorridor(100, 260);
+      world.obstacles = [];
+      world.distance = DIST.openEnd + 4;
+      world.prevDistance = world.distance;
+      world.x = 118;
+      world.prevX = 118;
+      world.time = 0;
+      game.tick(hold(118), TICK);
+      expect(game.snapshot().teach).toBe(VARIANT_TEACH[variant]);
+      expect(game.snapshot().teach).not.toBe(BEAT_SKIM_TEACH);
+      expect(world.beatSkimEvent).toBe(false);
+      expect(world.beatStreak).toBe(0);
+    }
+    expect(storage.getItem(BEAT_SKIM_TEACH_KEY)).toBeNull();
+    expect(beatSkimTeachSeen(storage)).toBe(false);
+
+    const miss = new Game(storage, { endlessSeed: 1, variant: "beat" });
+    miss.startEndless();
+    const world = miss.world!;
+    world.course.keyframes = wideCorridor(100, 260);
+    world.obstacles = [];
+    world.distance = DIST.openEnd + 4;
+    world.prevDistance = world.distance;
+    world.x = 118;
+    world.prevX = 118;
+    world.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    miss.tick(hold(118), TICK);
+    expect(miss.snapshot().teach).toBe(VARIANT_TEACH.beat);
+    expect(miss.snapshot().teach).not.toBe(BEAT_SKIM_TEACH);
+    expect(world.beatSkimEvent).toBe(false);
+    expect(world.beatStreak).toBe(0);
+    expect(storage.getItem(BEAT_SKIM_TEACH_KEY)).toBeNull();
   });
 });

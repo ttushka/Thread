@@ -174,9 +174,35 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
       expect(world.distance, date).toBeGreaterThan(teach[teach.length - 1]!.y);
       expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd - 1);
       expect(world.distance, date).toBeLessThan(DIST.roomBEnd);
+      expect(checkCourseLayout(world.course), date).toEqual([]);
+    }
+  });
+
+  it("scores 0 for a center through of Room A teach lips (PR1 skim-only)", () => {
+    for (const date of DATES) {
+      const world = createWorld(dailySeed(date), { daily: true, reducedMotion: true });
+      const teach = scoringGates(world.course).filter((g) => isRoomATeachLip(g.y));
+      const lastTeach = teach[teach.length - 1]!;
+      const cap = Math.ceil(40 / TICK);
+      for (let i = 0; i < cap; i++) {
+        updateWorld(
+          world,
+          {
+            steer: 0,
+            pointerActive: false,
+            pointerX: CX,
+            restart: false,
+            toTitle: false,
+          },
+          TICK,
+        );
+        if (!world.alive || world.distance > lastTeach.y + 20) break;
+      }
+      expect(world.alive, date).toBe(true);
+      expect(world.distance, date).toBeGreaterThan(lastTeach.y);
       expect(world.skimEvents, date).toBe(0);
       expect(worldScore(world), date).toBe(0);
-      expect(checkCourseLayout(world.course), date).toEqual([]);
+      expect(world.cleanPasses, date).toBeGreaterThan(0);
     }
   });
 

@@ -20,9 +20,9 @@ describe("utcDateKey", () => {
 
 describe("dailySeed", () => {
   it("hashes thread-daily- + date + SEED_VERSION with FNV-1a", () => {
-    expect(SEED_VERSION).toBe(8);
-    expect(dailySeedInput("2026-09-17")).toBe("thread-daily-2026-09-17:8");
-    expect(dailySeed("2026-09-17")).toBe(fnv1a32("thread-daily-2026-09-17:8"));
+    expect(SEED_VERSION).toBe(9);
+    expect(dailySeedInput("2026-09-17")).toBe("thread-daily-2026-09-17:9");
+    expect(dailySeed("2026-09-17")).toBe(fnv1a32("thread-daily-2026-09-17:9"));
   });
 
   it("matches committed golden uint32 for 2026-09-17", () => {

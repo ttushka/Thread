@@ -1,6 +1,9 @@
 export const FIELD_W = 360;
 export const FIELD_H = 640;
-/** Playfield centerline. Scoring gates after openEnd must sit off this line. */
+/**
+ * Playfield centerline. Scoring gates sit off this line (L/R silhouette),
+ * but Room A teach openings still *include* CX so a center hold lives.
+ */
 export const CX = FIELD_W / 2;
 
 /** Thread head screen Y in playfield pixels (from top). */
@@ -80,28 +83,46 @@ export function roomAt(y: number): CourseRoom {
 }
 
 /**
- * Room A — Pinch teach (0–15s). Wide corridor, scoring lips offset so CX is
- * dead (center scores nothing / nicks). Soft-friends weave into the pocket;
- * holding center still dies.
+ * Room A — two generator phases after the open rest (not another openEnd knob).
  *
- * First teach (v3): 1 offset lip at the CX-kill opening ceiling (~170), then a
- * long calm gap (≥250) before the next lip. A 180–200 *opening* would cover CX
- * on FIELD_W=360 (max CX-dead gap is <171 with WALL_MARGIN), so the hole stays
- * 168–170 and minOffset 80. After the calm, later Room A resumes gapMin/stepMin.
+ *   TEACH  — first `teachCount` scoring lips, or y < `teachEnd` (union).
+ *            Openings **include CX** so center can live. PR1 score stays
+ *            skim-only (a center through scores 0).
+ *   PINCH  — after that window (later Room A / Room B+). minOffset + killOff
+ *            so holding CX is death.
+ *
+ * Soft-friends v1–v3 kept CX-kill on the first weave. Skim-only score already
+ * makes center worthless; early Room A must not also CX-kill.
+ *
+ * Knobs: `teachCount` (first N lips) and `teachEnd` (Y / seconds at 90 u/s).
+ * `teachEnd` is the 15s Room A mark, so first-minute scoring Room A is teach
+ * (~6s of scoring after the 9s open; ~15s of the run). Later Endless A omits
+ * these knobs and uses the pinch band only.
+ *
+ * Pacing (v3 silhouette, not CX-kill): 1 close first lip, then calm ≥250.
+ * A 180–220 opening covers CX on FIELD_W=360; pinch stays ≤166 / minOffset 80.
  */
 export const ROOM_A = {
   gapMin: 150,
   gapMax: 166,
-  /** First teach lip — as wide as weave+Brake allows while CX stays dead. */
-  firstGapMin: 168,
-  firstGapMax: 170,
+  /** First N scoring lips of first-minute Room A — CX-live teach. */
+  teachCount: 4,
+  /** Y cutoff (union with teachCount). 1350 = 15s = DIST.roomAEnd. */
+  teachEnd: DIST.roomAEnd,
+  /** Teach openings — wide enough that CX lives (not the old 168–170 kill ceiling). */
+  teachGapMin: 196,
+  teachGapMax: 220,
+  /** Visible L/R offset; clamped so x=CX is not a nick or death. */
+  teachMinOffset: 40,
+  teachOffJitter: 8,
   firstCount: 1,
-  /** Approach from openEnd onto the single teach lip. */
+  /** Approach from openEnd onto the first teach lip. */
   firstStepMin: 32,
   firstStepMax: 40,
-  /** Distance after the teach lip before the next scoring lip. */
+  /** Distance after the first teach lip before the next scoring lip. */
   calmGapMin: 250,
   calmGapMax: 260,
+  /** Hard pinch after the teach window / later Endless A. */
   minOffset: 80,
   offJitter: 8,
   stepMin: 104,
@@ -109,6 +130,18 @@ export const ROOM_A = {
   holdMin: 36,
   holdMax: 52,
 } as const;
+
+/** First-minute Room A teach lip: y in [openEnd, teachEnd) or first `teachCount`. */
+export function isRoomATeachLip(y: number, roomAIndex = 0): boolean {
+  if (y < DIST.openEnd || y >= DIST.roomAEnd) return false;
+  if (y < ROOM_A.teachEnd) return true;
+  return roomAIndex < ROOM_A.teachCount;
+}
+
+/** Opening includes the centerline — thread at `x` is not a wall/gate death. */
+export function openingIncludesCx(left: number, right: number, x = CX): boolean {
+  return x >= left + THREAD_RADIUS && x <= right - THREAD_RADIUS;
+}
 
 /**
  * Room B — Weave corridor (15–40s). Alternating L/R, tighter so the center

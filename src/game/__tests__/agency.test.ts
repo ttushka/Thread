@@ -2,7 +2,18 @@ import { describe, expect, it } from "vitest";
 import { dailySeed } from "../seed.ts";
 import { generateCourse } from "../world/course.ts";
 import { checkCourseLayout, scoringGates, simulateCenterHold } from "../world/agency.ts";
-import { BASE_SPEED, CX, DIST, LIP_TELEGRAPH_MIN_S, ROOM_A, ROOM_B, ROOM_C, MOVER_MOTION } from "../world/constants.ts";
+import {
+  BASE_SPEED,
+  CX,
+  DIST,
+  LIP_TELEGRAPH_MIN_S,
+  ROOM_A,
+  ROOM_B,
+  ROOM_C,
+  MOVER_MOTION,
+  isRoomATeachLip,
+  openingIncludesCx,
+} from "../world/constants.ts";
 
 const DATES = ["2026-09-17", "2026-09-18", "2026-01-01", "2026-12-31", "2027-06-06"];
 const ENDLESS_SEEDS = [1, 42, 0x4eadc0de, 0xc0ffee];
@@ -21,8 +32,11 @@ describe("Daily agency validators", () => {
   it("kills center-hold in the first pinch band, not at the finish", () => {
     for (const date of DATES) {
       const world = simulateCenterHold(dailySeed(date), true);
-      expect(world.distance, date).toBeGreaterThan(DIST.openEnd);
-      expect(world.distance, date).toBeLessThan(DIST.roomAEnd);
+      const teach = scoringGates(world.course).filter((g) => isRoomATeachLip(g.y));
+      expect(world.distance, date).toBeGreaterThan(teach[teach.length - 1]!.y);
+      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd - 1);
+      expect(world.distance, date).toBeLessThan(DIST.roomBEnd);
+      expect(world.distance, date).toBeLessThan(world.course.finishY!);
     }
   });
 
@@ -32,6 +46,9 @@ describe("Daily agency validators", () => {
       for (const g of scoringGates(course)) {
         if (g.y < DIST.openEnd) continue;
         expect(Math.abs(g.baseCenter - CX), `${date} gate ${g.id}`).toBeGreaterThanOrEqual(40);
+        if (isRoomATeachLip(g.y)) {
+          expect(openingIncludesCx(g.left, g.right), `${date} teach ${g.id}`).toBe(true);
+        }
       }
     }
   });
@@ -47,6 +64,7 @@ describe("Daily agency validators", () => {
   it("keeps Room A/B lips telegraphed and dense enough to force skim", () => {
     expect(ROOM_A.stepMin).toBe(104);
     expect(ROOM_B.stepMin).toBe(92);
+    expect(ROOM_A.teachMinOffset).toBe(40);
     expect(ROOM_A.minOffset).toBe(80);
     expect(ROOM_B.minOffset).toBe(68);
     expect(LIP_TELEGRAPH_MIN_S).toBe(0.6);

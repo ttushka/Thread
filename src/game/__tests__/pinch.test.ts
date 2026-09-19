@@ -3,11 +3,13 @@ import type { Intent, ObstacleSpec } from "../../types.ts";
 import { dailySeed } from "../seed.ts";
 import { hitObstacle } from "../world/collision.ts";
 import {
+  BASE_SPEED,
   CLEAN_PASS_FLASH_MS,
   CX,
   DIST,
   FIELD_W,
   GATE_LIP_THICKNESS,
+  LIP_TELEGRAPH_MIN_S,
   POINTER_LERP,
   STEER_SPEED,
   TICK,
@@ -95,6 +97,14 @@ describe("pinch readability — static lips", () => {
     expect(gates.length).toBeGreaterThanOrEqual(8);
     expect(movers.length).toBe(1);
     expect(gates.length).toBeGreaterThan(movers.length * 3);
+
+    const early = gates.filter((g) => g.y <= DIST.moverEnd);
+    expect(early.length).toBeGreaterThanOrEqual(20);
+    for (let i = 1; i < early.length; i++) {
+      expect((early[i]!.y - early[i - 1]!.y) / BASE_SPEED).toBeGreaterThanOrEqual(
+        LIP_TELEGRAPH_MIN_S - 1e-6,
+      );
+    }
   });
 });
 

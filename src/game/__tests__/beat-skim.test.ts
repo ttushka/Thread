@@ -13,6 +13,7 @@ import {
   BEAT_SKIM_TEACH,
   BEAT_SKIM_TEACH_S,
   BEAT_PULSE_SCALE_MAX,
+  CONTROL_SKIM_HEAT,
   VARIANT_TEACH,
   beatIntensityFromStreak,
   beatSkimParticleCount,
@@ -232,7 +233,7 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     control.course.keyframes = wideCorridor(100, 260);
     control.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
     updateWorld(control, hold(118), TICK);
-    expect(control.particles).toHaveLength(beatSkimParticleCount(0));
+    expect(control.particles).toHaveLength(beatSkimParticleCount(CONTROL_SKIM_HEAT));
     expect(control.beatStreak).toBe(0);
     expect(control.distance).toBeCloseTo(cold.distance, 8);
   });
@@ -275,7 +276,7 @@ describe("BEAT-TEACH-SKIM-ON-PULSE-v1 tokens", () => {
     expect(beatSkimTeachOpacity(3.5)).toBe(0);
     expect(VARIANT_TEACH.beat).not.toMatch(/wrong|missed/i);
     expect(BEAT_SKIM_TEACH).not.toMatch(/wrong|missed/i);
-    expect(VARIANT_TEACH.control).toBe("Steer through the lips. Don’t touch the walls.");
+    expect(VARIANT_TEACH.control).toBe("Skim the edge \u2014 that\u2019s the craft.");
     expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createWorld, updateWorld, worldScore } from "../world/simulate.ts";
+import { createWorld, skimJuice, updateWorld, worldScore } from "../world/simulate.ts";
 import { CLEAN_AWARD, cleanPassAward } from "../score.ts";
-import { DIST, FIELD_W, GATE_LIP_THICKNESS, TICK } from "../world/constants.ts";
+import { DIST, FIELD_W, GATE_LIP_THICKNESS, NEAR_MISS_MS, TICK } from "../world/constants.ts";
 import type { Intent, ObstacleSpec } from "../../types.ts";
 
 const hold = (x: number): Intent => ({
@@ -188,5 +188,28 @@ describe("tension", () => {
     for (let i = 0; i < 80; i++) updateWorld(world, hold(118), TICK);
     expect(world.tension).toBe(3);
     expect(world.alive).toBe(true);
+  });
+
+  it("keeps Tension and near-miss juice when a skim cashes a Clean Pass", () => {
+    const gate = gateSpec({ id: 1, y: DIST.openEnd + 80 });
+    const nearX = gate.left + 5 + 14;
+    const world = worldWithGates(nearX, [gate]);
+    world.reducedMotion = false;
+    world.distance = gate.y - 0.5;
+    world.prevDistance = gate.y - 2;
+    updateWorld(world, hold(nearX), TICK);
+    expect(world.alive).toBe(true);
+    expect(world.obstacles[0]!.passed).toBe(true);
+    expect(world.obstacles[0]!.nicked).toBe(false);
+    expect(world.cleanPasses).toBe(1);
+    expect(world.cleanAward).toBe(cleanPassAward(1));
+    expect(world.tension).toBe(0);
+    expect(world.edgeSkimPulse).toBe(true);
+    expect(world.nearMissTimer).toBeCloseTo(NEAR_MISS_MS / 1000, 5);
+    expect(skimJuice(world)).toBeGreaterThan(0);
+    expect(world.particles.length).toBeGreaterThan(0);
+    const gapCenter = (gate.left + gate.right) / 2;
+    expect(world.particles.some((p) => Math.abs(p.x - nearX) < 0.01)).toBe(true);
+    expect(world.particles.every((p) => Math.abs(p.x - gapCenter) < 0.01)).toBe(false);
   });
 });

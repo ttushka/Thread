@@ -22,7 +22,7 @@ import { generateCourse, streamEvents } from "../world/course.ts";
 import dailyStream from "../__fixtures__/daily-stream-2026-09-17.json";
 import titleHtml from "../../../index.html?raw";
 
-const CONTROL_TEACH = "Steer through the lips. Don’t touch the walls.";
+const CONTROL_TEACH = "Skim the edge \u2014 that\u2019s the craft.";
 const LEGACY_GENERIC_HELPER = "Steer with A/D or arrows";
 
 function innerById(html: string, id: string): string {
@@ -119,8 +119,8 @@ describe("BEAT-SKIM-MASTERY-v1 tokens", () => {
 });
 
 describe("control path isolation", () => {
-  it("does not bump SEED_VERSION", () => {
-    expect(SEED_VERSION).toBe(2);
+  it("locks SEED_VERSION for the control generator", () => {
+    expect(SEED_VERSION).toBe(3);
   });
 
   it("keeps Daily goldens when variant is omitted or control", () => {

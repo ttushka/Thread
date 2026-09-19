@@ -71,6 +71,38 @@ export const EARLY_MOVER_BAND = {
   stepMax: 120,
 } as const;
 
+/**
+ * CORE-LOOP-SKIM-NATIVE-v1 Slice C — movers as mid-spice, not lottery spikes.
+ * Two placements in the 20–40s band (~2× vs the old single special). Spacing
+ * stays well above LIP_TELEGRAPH_MIN_S so they season the weave, not stack.
+ */
+export const MOVER_BAND = {
+  count: 2,
+  /** First mover offset from pinchEnd (same window as the old single special). */
+  firstMin: 280,
+  firstMax: 520,
+  /** Gap from first mover to second (~8–11s at BASE_SPEED). */
+  spacingMin: 720,
+  spacingMax: 980,
+  /** Keep the last mover inside moverEnd with rest room. */
+  tailPad: 160,
+} as const;
+
+/**
+ * Readable-mid motion. Lower amplitude / longer period than the old 56–72 /
+ * 2.5–3.2 so a player can react without Brake. Retry may raise amplitude to
+ * `amplitudeRetryCap` to keep a telegraphed center-punish; never snap-shut.
+ */
+export const MOVER_MOTION = {
+  gapMin: 100,
+  gapMax: 120,
+  amplitudeMin: 48,
+  amplitudeMax: 64,
+  amplitudeRetryCap: 72,
+  periodMin: 2.8,
+  periodMax: 3.4,
+} as const;
+
 export const VIEW_AHEAD = THREAD_SCREEN_Y;
 export const VIEW_BEHIND = FIELD_H - THREAD_SCREEN_Y;
 

@@ -11,6 +11,8 @@ import {
   GATE_LIP_THICKNESS,
   KEYFRAME_PAD,
   LIP_TELEGRAPH_MIN_S,
+  MOVER_BAND,
+  MOVER_MOTION,
   THREAD_RADIUS,
   WALL_MARGIN,
 } from "./constants.ts";
@@ -235,9 +237,9 @@ export function searchMoverPhase(base: ObstacleSpec): MoverPhaseSearch {
 
 function placeMover(rng: Rng, y: number, side: number, nextId: () => number): ObstacleSpec {
   const id = nextId();
-  let gapWidth = rng.float(100, 120);
-  let amplitude = rng.float(56, 72);
-  const period = rng.float(2.5, 3.2);
+  let gapWidth = rng.float(MOVER_MOTION.gapMin, MOVER_MOTION.gapMax);
+  let amplitude = rng.float(MOVER_MOTION.amplitudeMin, MOVER_MOTION.amplitudeMax);
+  const period = rng.float(MOVER_MOTION.periodMin, MOVER_MOTION.periodMax);
   let offset = rng.float(40, 70);
 
   const fit = (): ObstacleSpec => {
@@ -267,7 +269,7 @@ function placeMover(rng: Rng, y: number, side: number, nextId: () => number): Ob
   let spec = fit();
   for (let attempt = 0; attempt < 8; attempt++) {
     if (attempt > 0) {
-      amplitude = Math.min(80, amplitude + 8);
+      amplitude = Math.min(MOVER_MOTION.amplitudeRetryCap, amplitude + 8);
       offset = Math.min(90, offset + 10);
       spec = fit();
     }
@@ -278,6 +280,31 @@ function placeMover(rng: Rng, y: number, side: number, nextId: () => number): Ob
   const found = searchMoverPhase(spec);
   spec.phase = found.phase;
   return spec;
+}
+
+/** Two Ys in pinchEnd→moverEnd, ≥ telegraph apart. Shared by Control and Beat. */
+function planMoverBandYs(rng: Rng): number[] {
+  const first = DIST.pinchEnd + rng.float(MOVER_BAND.firstMin, MOVER_BAND.firstMax);
+  const spaced = first + rng.float(MOVER_BAND.spacingMin, MOVER_BAND.spacingMax);
+  const second = Math.min(DIST.moverEnd - MOVER_BAND.tailPad, spaced);
+  const ys = [first];
+  if (second - first >= BASE_SPEED * LIP_TELEGRAPH_MIN_S) ys.push(second);
+  return ys;
+}
+
+function insertMover(
+  rng: Rng,
+  y: number,
+  side: number,
+  nextId: () => number,
+  obstacles: ObstacleSpec[],
+  keyframes: WallKeyframe[],
+  center: number,
+): number {
+  obstacles.push(placeMover(rng, y, side, nextId));
+  const around = placeRest(rng, y, 188, 220, 16, center);
+  keyframes.push(around.kf);
+  return around.center;
 }
 
 export type CourseOptions = {
@@ -349,19 +376,16 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
     pushGate(EARLY_PINCH.gapMin, EARLY_PINCH.gapMax, EARLY_PINCH.minOffset, EARLY_PINCH.offJitter, step);
   }
 
-  // 20–40s: readable pinches + one mover. Center punish only if already closed at −0.6s.
-  const moverAt = DIST.pinchEnd + rng.float(280, 520);
-  let moverPlaced = false;
+  // 20–40s: readable pinches + two movers (Slice C mid-spice). Center punish only if already closed at −0.6s.
+  const moverYs = planMoverBandYs(rng);
+  let moverIdx = 0;
   while (y < DIST.moverEnd) {
     const step = lipStep(rng, EARLY_MOVER_BAND.stepMin, EARLY_MOVER_BAND.stepMax);
-    if (!moverPlaced && y + step >= moverAt) {
-      const my = moverAt;
-      obstacles.push(placeMover(rng, my, side, nextId));
-      moverPlaced = true;
-      y = my;
-      const around = placeRest(rng, y, 188, 220, 16, center);
-      center = around.center;
-      keyframes.push(around.kf);
+    const nextMoverY = moverYs[moverIdx];
+    if (nextMoverY !== undefined && y + step >= nextMoverY) {
+      y = nextMoverY;
+      center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
+      moverIdx += 1;
       continue;
     }
     if (y + step >= DIST.moverEnd) break;
@@ -373,8 +397,9 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
       step,
     );
   }
-  if (!moverPlaced) {
-    obstacles.push(placeMover(rng, DIST.pinchEnd + 360, side, nextId));
+  while (moverIdx < moverYs.length) {
+    obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
+    moverIdx += 1;
   }
   if (y < DIST.moverEnd) {
     pushRest(188, 220, 16, DIST.moverEnd - y);
@@ -501,18 +526,15 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
     pushGate(EARLY_PINCH.gapMin, EARLY_PINCH.gapMax, EARLY_PINCH.minOffset, EARLY_PINCH.offJitter, step);
   }
 
-  const moverAt = DIST.pinchEnd + rng.float(280, 520);
-  let moverPlaced = false;
+  const moverYs = planMoverBandYs(rng);
+  let moverIdx = 0;
   while (y < DIST.moverEnd) {
     const step = lipStep(rng, EARLY_MOVER_BAND.stepMin, EARLY_MOVER_BAND.stepMax);
-    if (!moverPlaced && y + step >= moverAt) {
-      const my = moverAt;
-      obstacles.push(placeMover(rng, my, side, nextId));
-      moverPlaced = true;
-      y = my;
-      const around = placeRest(rng, y, 188, 220, 16, center);
-      center = around.center;
-      keyframes.push(around.kf);
+    const nextMoverY = moverYs[moverIdx];
+    if (nextMoverY !== undefined && y + step >= nextMoverY) {
+      y = nextMoverY;
+      center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
+      moverIdx += 1;
       continue;
     }
     if (y + step >= DIST.moverEnd) break;
@@ -524,8 +546,9 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
       step,
     );
   }
-  if (!moverPlaced) {
-    obstacles.push(placeMover(rng, DIST.pinchEnd + 360, side, nextId));
+  while (moverIdx < moverYs.length) {
+    obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
+    moverIdx += 1;
   }
   if (y < DIST.moverEnd) {
     pushRest(188, 220, 16, DIST.moverEnd - y);

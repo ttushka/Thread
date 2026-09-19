@@ -213,16 +213,13 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
 
       const cap = Math.ceil(90 / TICK);
       for (let i = 0; i < cap; i++) {
-        const upcoming = gates.find((g) => g.y > world.distance - 8) ?? gates[gates.length - 1]!;
-        const look = sampleWalls(world.course.keyframes, Math.min(upcoming.y, world.distance + 40));
-        const close = upcoming.y - world.distance < 120;
-        const pocket = close ? upcoming.baseCenter : (look.left + look.right) / 2;
+        const look = sampleWalls(world.course.keyframes, world.distance + 16);
         updateWorld(
           world,
           {
             steer: 0,
             pointerActive: true,
-            pointerX: pocket,
+            pointerX: (look.left + look.right) / 2,
             restart: false,
             toTitle: false,
             brake: world.distance >= DIST.openEnd,

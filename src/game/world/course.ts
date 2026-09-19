@@ -423,10 +423,11 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
         room.firstCount !== undefined &&
         placed === room.firstCount &&
         room.calmGapMin !== undefined;
-      // First teach approach is not lip-to-lip, so it may sit below #19's 0.6s floor.
+      // Opening teach may sit close after openEnd. Later A segments still have a
+      // previous scoring lip, so they keep #19's 0.6s floor.
       const step = afterTeach
         ? lipStep(rng, room.calmGapMin!, room.calmGapMax ?? room.calmGapMin!)
-        : first && room.firstStepMin !== undefined
+        : first && room.firstStepMin !== undefined && lastLipY <= 0
           ? rng.float(room.firstStepMin, room.firstStepMax ?? room.firstStepMin)
           : lipStep(rng, room.stepMin, room.stepMax);
       if (plannedGateY(step) >= until) break;
@@ -515,7 +516,17 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
       const knob = (segment - 1) % 3;
       const end = Math.min(y + 960, horizon);
       if (knob === 0) {
-        fillLipRoom(end, ROOM_A);
+        // Later A is v2 weave only — opening teach/calm knobs stay on the first minute.
+        fillLipRoom(end, {
+          gapMin: ROOM_A.gapMin,
+          gapMax: ROOM_A.gapMax,
+          minOffset: ROOM_A.minOffset,
+          offJitter: ROOM_A.offJitter,
+          stepMin: ROOM_A.stepMin,
+          stepMax: ROOM_A.stepMax,
+          holdMin: ROOM_A.holdMin,
+          holdMax: ROOM_A.holdMax,
+        });
         if (y < end) pushRest(ROOM_A.gapMin, ROOM_A.gapMax, 12, end - y);
       } else if (knob === 1) {
         fillLipRoom(end, ROOM_B);

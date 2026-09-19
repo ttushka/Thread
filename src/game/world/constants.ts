@@ -57,7 +57,8 @@ export const KEYFRAME_PAD = 80;
  * `rhythmEnd` aliases Room C so first-minute tests keep a 60s name.
  */
 export const DIST = {
-  openEnd: 360,
+  /** Soft-friends Room A fix: 5.0s safe open (was 4.0s / 360). */
+  openEnd: 450,
   roomAEnd: 1350,
   roomBEnd: 3600,
   roomCEnd: 5400,
@@ -77,12 +78,19 @@ export function roomAt(y: number): CourseRoom {
 
 /**
  * Room A — Pinch teach (0–15s). Wide corridor, scoring lips offset so CX is
- * dead. Soft-friends weave into the pocket; holding center dies.
- * Gap stays under ~170 so wall-margin still allows a CX-kill offset.
+ * dead (center scores nothing / nicks). Soft-friends weave into the pocket;
+ * holding center still dies.
+ * First-cluster gaps sit at the CX-kill ceiling (~170) so a small weave+Brake
+ * can clear the opening pinch. Later Room A stays the same silhouette, just
+ * shy of that ceiling. Wall-margin still allows a CX-kill offset.
  */
 export const ROOM_A = {
   gapMin: 150,
   gapMax: 166,
+  /** First lips after the open — wide enough for weave+Brake, still CX-dead. */
+  firstGapMin: 164,
+  firstGapMax: 170,
+  firstCount: 3,
   minOffset: 80,
   offJitter: 8,
   stepMin: 104,

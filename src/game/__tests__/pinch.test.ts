@@ -10,6 +10,7 @@ import {
   FIELD_W,
   GATE_LIP_THICKNESS,
   LIP_TELEGRAPH_MIN_S,
+  MOVER_BAND,
   POINTER_LERP,
   STEER_SPEED,
   TICK,
@@ -89,13 +90,13 @@ describe("pinch readability — static lips", () => {
     }
   });
 
-  it("keeps movers rare specials and pinches the common beat", () => {
+  it("keeps movers as mid-spice seasoning, not the common beat", () => {
     const course = generateCourse(dailySeed("2026-09-17"), { daily: true });
     const firstMinute = course.obstacles.filter((o) => o.y <= DIST.rhythmEnd);
     const gates = firstMinute.filter((o) => o.kind === "gate");
     const movers = firstMinute.filter((o) => o.kind === "mover");
     expect(gates.length).toBeGreaterThanOrEqual(8);
-    expect(movers.length).toBe(1);
+    expect(movers.length).toBe(MOVER_BAND.count);
     expect(gates.length).toBeGreaterThan(movers.length * 3);
 
     const early = gates.filter((g) => g.y <= DIST.moverEnd);

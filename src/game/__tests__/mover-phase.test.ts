@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ObstacleSpec } from "../../types.ts";
 import { dailySeed } from "../seed.ts";
-import { BASE_SPEED, CX, THREAD_RADIUS } from "../world/constants.ts";
+import { BASE_SPEED, CX, MOVER_BAND, THREAD_RADIUS } from "../world/constants.ts";
 import {
   cxFitsMoverGap,
   generateCourse,
@@ -151,7 +151,7 @@ describe("Daily movers after phase search", () => {
     for (const date of DATES) {
       const course = generateCourse(dailySeed(date), { daily: true });
       const movers = course.obstacles.filter((o) => o.kind === "mover");
-      expect(movers.length, date).toBeGreaterThan(0);
+      expect(movers.length, date).toBe(MOVER_BAND.count);
       for (const m of movers) {
         expect(isMoverSnapPhase(m), date).toBe(false);
         const tContact = moverContactTime(m);
@@ -162,13 +162,13 @@ describe("Daily movers after phase search", () => {
     }
   });
 
-  it("replays the same mover phase for the same Daily key", () => {
+  it("replays the same mover phases for the same Daily key", () => {
     const seed = dailySeed("2026-09-17");
     const a = streamEvents(generateCourse(seed, { daily: true }));
     const b = streamEvents(generateCourse(seed, { daily: true }));
     expect(a).toEqual(b);
     const movers = a.filter((e) => e.kind === "mover");
-    expect(movers.length).toBe(1);
-    expect(movers[0]!.phase).toBe(b.find((e) => e.kind === "mover")!.phase);
+    expect(movers.length).toBe(MOVER_BAND.count);
+    expect(movers.map((m) => m.phase)).toEqual(b.filter((e) => e.kind === "mover").map((m) => m.phase));
   });
 });

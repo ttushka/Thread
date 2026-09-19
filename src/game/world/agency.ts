@@ -1,6 +1,17 @@
 import type { CourseSpec, ObstacleSpec } from "../../types.ts";
 import type { Intent } from "../../types.ts";
-import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S, THREAD_RADIUS, TICK } from "./constants.ts";
+import {
+  BASE_SPEED,
+  CX,
+  DIST,
+  EARLY_MOVER_BAND,
+  EARLY_PINCH,
+  LIP_TELEGRAPH_MIN_S,
+  MOVER_BAND,
+  MOVER_MOTION,
+  THREAD_RADIUS,
+  TICK,
+} from "./constants.ts";
 import { cxFitsMoverGap, isMoverSnapPhase, moverContactTime, moverUnsafeDuration } from "./course.ts";
 import { createWorld, updateWorld, type World } from "./simulate.ts";
 
@@ -76,31 +87,47 @@ export function checkCourseLayout(course: CourseSpec): string[] {
     if (rhythm.length !== 3) {
       errors.push(`Daily rhythm band must have exactly 3 scoring gates, got ${rhythm.length}`);
     }
-    const movers = course.obstacles.filter(
-      (o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd,
-    );
-    if (movers.length !== 1) {
-      errors.push(`Daily mover window must have exactly 1 mover, got ${movers.length}`);
+    const movers = course.obstacles
+      .filter((o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd)
+      .sort((a, b) => a.y - b.y || a.id - b.id);
+    if (movers.length !== MOVER_BAND.count) {
+      errors.push(`Daily mover window must have exactly ${MOVER_BAND.count} movers, got ${movers.length}`);
     } else {
-      const m = movers[0]!;
-      if (m.gapWidth < 100 - 1e-6 || m.gapWidth > 120 + 1e-6) {
-        errors.push(`mover gapWidth ${m.gapWidth.toFixed(2)} outside 100–120`);
+      for (let i = 1; i < movers.length; i++) {
+        const dt = (movers[i]!.y - movers[i - 1]!.y) / BASE_SPEED;
+        if (dt < LIP_TELEGRAPH_MIN_S - 1e-6) {
+          errors.push(
+            `movers ${movers[i - 1]!.id}→${movers[i]!.id} telegraph ${dt.toFixed(3)}s < ${LIP_TELEGRAPH_MIN_S}s`,
+          );
+        }
       }
-      if (m.amplitude < 56 - 1e-6 || m.amplitude > 80 + 1e-6) {
-        errors.push(`mover amplitude ${m.amplitude.toFixed(2)} outside 56–80`);
-      }
-      if (m.period < 2.5 - 1e-6 || m.period > 3.2 + 1e-6) {
-        errors.push(`mover period ${m.period.toFixed(3)} outside 2.5–3.2`);
-      }
-      if (Math.abs(m.baseCenter - CX) < 40 - 1e-3) {
-        errors.push(`mover baseCenter on highway |c-CX|=${Math.abs(m.baseCenter - CX).toFixed(2)}`);
-      }
-      if (isMoverSnapPhase(m)) {
-        errors.push(`mover snaps shut: CX safe at tContact−0.6s but unsafe at contact`);
-      } else if (!cxFitsMoverGap(m, moverContactTime(m))) {
-        const unsafe = moverUnsafeDuration(m);
-        if (unsafe < 0.35) {
-          errors.push(`mover center-hold unsafe window ${unsafe.toFixed(3)}s < 0.35s`);
+      for (const m of movers) {
+        if (m.gapWidth < MOVER_MOTION.gapMin - 1e-6 || m.gapWidth > MOVER_MOTION.gapMax + 1e-6) {
+          errors.push(`mover gapWidth ${m.gapWidth.toFixed(2)} outside ${MOVER_MOTION.gapMin}–${MOVER_MOTION.gapMax}`);
+        }
+        if (
+          m.amplitude < MOVER_MOTION.amplitudeMin - 1e-6 ||
+          m.amplitude > MOVER_MOTION.amplitudeRetryCap + 1e-6
+        ) {
+          errors.push(
+            `mover amplitude ${m.amplitude.toFixed(2)} outside ${MOVER_MOTION.amplitudeMin}–${MOVER_MOTION.amplitudeRetryCap}`,
+          );
+        }
+        if (m.period < MOVER_MOTION.periodMin - 1e-6 || m.period > MOVER_MOTION.periodMax + 1e-6) {
+          errors.push(
+            `mover period ${m.period.toFixed(3)} outside ${MOVER_MOTION.periodMin}–${MOVER_MOTION.periodMax}`,
+          );
+        }
+        if (Math.abs(m.baseCenter - CX) < 40 - 1e-3) {
+          errors.push(`mover baseCenter on highway |c-CX|=${Math.abs(m.baseCenter - CX).toFixed(2)}`);
+        }
+        if (isMoverSnapPhase(m)) {
+          errors.push(`mover snaps shut: CX safe at tContact−0.6s but unsafe at contact`);
+        } else if (!cxFitsMoverGap(m, moverContactTime(m))) {
+          const unsafe = moverUnsafeDuration(m);
+          if (unsafe < 0.35) {
+            errors.push(`mover center-hold unsafe window ${unsafe.toFixed(3)}s < 0.35s`);
+          }
         }
       }
     }

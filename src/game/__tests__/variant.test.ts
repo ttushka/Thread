@@ -124,7 +124,7 @@ describe("BEAT-SKIM-MASTERY-v1 tokens", () => {
 
 describe("control path isolation", () => {
   it("locks SEED_VERSION for the control generator", () => {
-    expect(SEED_VERSION).toBe(3);
+    expect(SEED_VERSION).toBe(4);
   });
 
   it("keeps Daily goldens when variant is omitted or control", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dailySeed } from "../seed.ts";
 import { generateCourse } from "../world/course.ts";
 import { checkCourseLayout, scoringGates, simulateCenterHold } from "../world/agency.ts";
-import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S } from "../world/constants.ts";
+import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S, MOVER_BAND, MOVER_MOTION } from "../world/constants.ts";
 
 const DATES = ["2026-09-17", "2026-09-18", "2026-01-01", "2026-12-31", "2027-06-06"];
 const ENDLESS_SEEDS = [1, 42, 0x4eadc0de, 0xc0ffee];
@@ -68,6 +68,31 @@ describe("Daily agency validators", () => {
       const course = generateCourse(seed, { daily: false, endlessHorizon: 4000 });
       const early = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.moverEnd);
       expect(early.length, String(seed)).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it("places two readable-mid movers in the 20–40s band without snap-shut", () => {
+    expect(MOVER_BAND.count).toBe(2);
+    expect(MOVER_BAND.firstMin).toBe(280);
+    expect(MOVER_BAND.firstMax).toBe(520);
+    expect(MOVER_BAND.spacingMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+    expect(MOVER_MOTION.amplitudeMin).toBe(48);
+    expect(MOVER_MOTION.amplitudeMax).toBe(64);
+    expect(MOVER_MOTION.amplitudeRetryCap).toBe(72);
+    expect(MOVER_MOTION.periodMin).toBe(2.8);
+    expect(MOVER_MOTION.periodMax).toBe(3.4);
+
+    for (const date of DATES) {
+      const course = generateCourse(dailySeed(date), { daily: true });
+      expect(checkCourseLayout(course), date).toEqual([]);
+    }
+    for (const seed of ENDLESS_SEEDS) {
+      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.moverEnd + 200 });
+      const movers = course.obstacles
+        .filter((o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd)
+        .sort((a, b) => a.y - b.y);
+      expect(movers.length, String(seed)).toBe(MOVER_BAND.count);
+      expect((movers[1]!.y - movers[0]!.y) / BASE_SPEED, String(seed)).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
     }
   });
 

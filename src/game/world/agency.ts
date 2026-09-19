@@ -92,8 +92,10 @@ export function checkCourseLayout(course: CourseSpec): string[] {
       errors.push(`Room B must have at least 6 scoring gates, got ${roomB.length}`);
     }
     for (const g of roomA) {
-      if (g.gapWidth < ROOM_A.gapMin - 1e-6 || g.gapWidth > ROOM_A.gapMax + 1e-6) {
-        errors.push(`Room A gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${ROOM_A.gapMin}–${ROOM_A.gapMax}`);
+      const lo = ROOM_A.gapMin;
+      const hi = Math.max(ROOM_A.gapMax, ROOM_A.firstGapMax);
+      if (g.gapWidth < lo - 1e-6 || g.gapWidth > hi + 1e-6) {
+        errors.push(`Room A gate ${g.id} gap ${g.gapWidth.toFixed(1)} outside ${lo}–${hi}`);
       }
     }
     for (const g of roomB) {

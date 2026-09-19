@@ -354,6 +354,9 @@ type LipRoom = {
   stepMax: number;
   holdMin?: number;
   holdMax?: number;
+  firstGapMin?: number;
+  firstGapMax?: number;
+  firstCount?: number;
 };
 
 /**
@@ -409,10 +412,15 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
   const plannedGateY = (dy: number) => (beat ? quantizeLipY(y + dy, lastLipY) : y + dy);
 
   const fillLipRoom = (until: number, room: LipRoom) => {
+    let placed = 0;
     while (y < until) {
+      const first = room.firstCount !== undefined && placed < room.firstCount;
       const step = lipStep(rng, room.stepMin, room.stepMax);
       if (plannedGateY(step) >= until) break;
-      pushGate(room.gapMin, room.gapMax, room.minOffset, room.offJitter, step);
+      const gapMin = first ? (room.firstGapMin ?? room.gapMin) : room.gapMin;
+      const gapMax = first ? (room.firstGapMax ?? room.gapMax) : room.gapMax;
+      pushGate(gapMin, gapMax, room.minOffset, room.offJitter, step);
+      placed += 1;
       if (room.holdMin !== undefined && room.holdMax !== undefined) {
         const hold = rng.float(room.holdMin, room.holdMax);
         if (y + hold < until) pushHold(hold);

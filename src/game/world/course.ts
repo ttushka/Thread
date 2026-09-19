@@ -10,6 +10,7 @@ import {
   KEYFRAME_PAD,
   LIP_TELEGRAPH_MIN_S,
   MOVER_MOTION,
+  NEAR_MISS_BAND,
   NICK_BAND,
   ROOM_A,
   ROOM_B,
@@ -95,7 +96,7 @@ function placeRest(
 /**
  * Scoring gate: forced offset from CX, not prevCenter+wander.
  * Pinch: offset is raised so holding x=CX is a death (not a nick-through).
- * Teach (`cxLive`): offset is *capped* so x=CX stays inside the live pocket.
+ * CX-live: offset is *capped* so x=CX is a clean through (not nick, skim, or death).
  */
 function placeScoringGate(
   rng: Rng,
@@ -111,7 +112,7 @@ function placeScoringGate(
   const gap = rng.float(gapMin, gapMax);
   let off = minOffset + rng.float(0, offJitter);
   if (cxLive) {
-    const liveOff = gap / 2 - THREAD_RADIUS - NICK_BAND - 0.5;
+    const liveOff = gap / 2 - THREAD_RADIUS - NICK_BAND - NEAR_MISS_BAND - 0.5;
     if (off > liveOff) off = Math.max(0, liveOff);
   } else {
     const killOff = gap / 2 - THREAD_RADIUS + 0.5;

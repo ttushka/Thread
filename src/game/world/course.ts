@@ -359,6 +359,8 @@ type LipRoom = {
   firstCount?: number;
   firstStepMin?: number;
   firstStepMax?: number;
+  calmGapMin?: number;
+  calmGapMax?: number;
 };
 
 /**
@@ -417,18 +419,26 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     let placed = 0;
     while (y < until) {
       const first = room.firstCount !== undefined && placed < room.firstCount;
-      const betweenFirst =
-        first && placed > 0 && room.firstStepMin !== undefined && room.firstStepMax !== undefined;
-      const step = betweenFirst
-        ? lipStep(rng, room.firstStepMin!, room.firstStepMax!)
-        : lipStep(rng, room.stepMin, room.stepMax);
+      const afterTeach =
+        room.firstCount !== undefined &&
+        placed === room.firstCount &&
+        room.calmGapMin !== undefined;
+      // Opening teach may sit close after openEnd. Later A segments still have a
+      // previous scoring lip, so they keep #19's 0.6s floor.
+      const step = afterTeach
+        ? lipStep(rng, room.calmGapMin!, room.calmGapMax ?? room.calmGapMin!)
+        : first && room.firstStepMin !== undefined && lastLipY <= 0
+          ? rng.float(room.firstStepMin, room.firstStepMax ?? room.firstStepMin)
+          : lipStep(rng, room.stepMin, room.stepMax);
       if (plannedGateY(step) >= until) break;
       const gapMin = first ? (room.firstGapMin ?? room.gapMin) : room.gapMin;
       const gapMax = first ? (room.firstGapMax ?? room.gapMax) : room.gapMax;
       pushGate(gapMin, gapMax, room.minOffset, room.offJitter, step);
       placed += 1;
-      const stillFirst = room.firstCount !== undefined && placed < room.firstCount;
-      if (!stillFirst && room.holdMin !== undefined && room.holdMax !== undefined) {
+      // Hold only after the teach + first post-calm lip so Daily/Beat still
+      // fit ≥3 Room A gates under the ≥250 calm gap.
+      const allowHold = room.firstCount === undefined || placed > room.firstCount + 1;
+      if (allowHold && room.holdMin !== undefined && room.holdMax !== undefined) {
         const hold = rng.float(room.holdMin, room.holdMax);
         if (y + hold < until) pushHold(hold);
       }
@@ -468,7 +478,8 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     gateId: null,
   });
   while (y < DIST.openEnd) {
-    pushRest(260, 300, 16, rng.float(70, 90));
+    const dy = rng.float(70, 90);
+    pushRest(260, 300, 16, Math.min(dy, DIST.openEnd - y));
   }
   side = rng.pick([-1, 1] as const);
 
@@ -505,7 +516,17 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
       const knob = (segment - 1) % 3;
       const end = Math.min(y + 960, horizon);
       if (knob === 0) {
-        fillLipRoom(end, ROOM_A);
+        // Later A is v2 weave only — opening teach/calm knobs stay on the first minute.
+        fillLipRoom(end, {
+          gapMin: ROOM_A.gapMin,
+          gapMax: ROOM_A.gapMax,
+          minOffset: ROOM_A.minOffset,
+          offJitter: ROOM_A.offJitter,
+          stepMin: ROOM_A.stepMin,
+          stepMax: ROOM_A.stepMax,
+          holdMin: ROOM_A.holdMin,
+          holdMax: ROOM_A.holdMax,
+        });
         if (y < end) pushRest(ROOM_A.gapMin, ROOM_A.gapMax, 12, end - y);
       } else if (knob === 1) {
         fillLipRoom(end, ROOM_B);
@@ -587,7 +608,7 @@ function generateLanesCourse(seed: number, opts: CourseOptions): CourseSpec {
 
   keyframes.push(wide(-KEYFRAME_PAD));
   while (y < DIST.openEnd) {
-    y += rng.float(70, 90);
+    y += Math.min(rng.float(70, 90), DIST.openEnd - y);
     keyframes.push(wide(y));
   }
   side = rng.pick([-1, 1] as const);

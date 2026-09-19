@@ -11,7 +11,7 @@ import {
   ROOM_B,
   ROOM_C,
   MOVER_MOTION,
-  isRoomATeachLip,
+  isRoomALiveOpening,
   openingIncludesCx,
 } from "../world/constants.ts";
 
@@ -29,12 +29,12 @@ describe("Daily agency validators", () => {
     }
   });
 
-  it("kills center-hold in the first pinch band, not at the finish", () => {
+  it("kills center-hold in Room B, not mid–Room A or at the finish", () => {
     for (const date of DATES) {
       const world = simulateCenterHold(dailySeed(date), true);
-      const teach = scoringGates(world.course).filter((g) => isRoomATeachLip(g.y));
-      expect(world.distance, date).toBeGreaterThan(teach[teach.length - 1]!.y);
-      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd - 1);
+      const roomA = scoringGates(world.course).filter((g) => isRoomALiveOpening(g.y));
+      expect(world.distance, date).toBeGreaterThan(roomA[roomA.length - 1]!.y);
+      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd);
       expect(world.distance, date).toBeLessThan(DIST.roomBEnd);
       expect(world.distance, date).toBeLessThan(world.course.finishY!);
     }
@@ -46,8 +46,8 @@ describe("Daily agency validators", () => {
       for (const g of scoringGates(course)) {
         if (g.y < DIST.openEnd) continue;
         expect(Math.abs(g.baseCenter - CX), `${date} gate ${g.id}`).toBeGreaterThanOrEqual(40);
-        if (isRoomATeachLip(g.y)) {
-          expect(openingIncludesCx(g.left, g.right), `${date} teach ${g.id}`).toBe(true);
+        if (isRoomALiveOpening(g.y)) {
+          expect(openingIncludesCx(g.left, g.right), `${date} Room A ${g.id}`).toBe(true);
         }
       }
     }

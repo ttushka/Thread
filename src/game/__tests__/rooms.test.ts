@@ -17,7 +17,7 @@ import {
   STEER_KEY_TAP_MS,
   STEER_SPEED,
   TICK,
-  isRoomATeachLip,
+  isRoomALiveOpening,
   openingIncludesCx,
   roomAt,
 } from "../world/constants.ts";
@@ -53,8 +53,6 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     expect(ROOM_A.gapMin).toBeGreaterThan(ROOM_B.gapMax);
     expect(ROOM_A.teachGapMin).toBeGreaterThan(ROOM_A.gapMax);
     expect(ROOM_A.teachGapMax).toBe(220);
-    expect(ROOM_A.teachCount).toBe(4);
-    expect(ROOM_A.teachEnd).toBe(DIST.roomAEnd);
     expect(ROOM_A.teachMinOffset).toBe(40);
     expect(ROOM_A.firstCount).toBe(1);
     expect(ROOM_A.firstStepMin).toBe(32);
@@ -62,7 +60,7 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     expect(ROOM_A.calmGapMin).toBeGreaterThanOrEqual(250);
     expect(ROOM_A.calmGapMax).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
     expect(ROOM_A.minOffset).toBe(80);
-    // Teach openings cover CX (180–220). Pinch stays at the CX-dead ceiling (<171).
+    // First opening covers CX (180–220). Later A pinch look stays <171 but CX-live.
     expect(ROOM_A.teachGapMin).toBeGreaterThan(171);
     expect(ROOM_A.gapMax).toBeLessThan(171);
     expect(ROOM_A.minOffset).toBeGreaterThan(ROOM_B.minOffset);
@@ -89,21 +87,22 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
         expect(g.gapWidth, `${date} A-first ${g.id}`).toBeLessThanOrEqual(ROOM_A.teachGapMax);
       }
       const calmDy = a[1]!.y - a[0]!.y;
-      expect(calmDy, `${date} A-teach calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
-      expect(calmDy, `${date} A-teach calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
+      expect(calmDy, `${date} A-open calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
+      expect(calmDy, `${date} A-open calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
       for (const [i, g] of a.entries()) {
+        expect(isRoomALiveOpening(g.y), `${date} A live ${g.id}`).toBe(true);
+        expect(openingIncludesCx(g.left, g.right), `${date} A CX ${g.id}`).toBe(true);
         expect(g.gapWidth, `${date} A ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.gapMin);
-        const teach = isRoomATeachLip(g.y, i);
-        if (teach) {
-          expect(g.gapWidth, `${date} A-teach ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.teachGapMin);
-          expect(g.gapWidth, `${date} A-teach ${g.id}`).toBeLessThanOrEqual(ROOM_A.teachGapMax);
-          expect(openingIncludesCx(g.left, g.right), `${date} A-teach CX ${g.id}`).toBe(true);
-          expect(Math.abs(g.baseCenter - CX), `${date} A-teach off ${g.id}`).toBeGreaterThanOrEqual(
+        if (i < ROOM_A.firstCount) {
+          expect(g.gapWidth, `${date} A-open ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.teachGapMin);
+          expect(g.gapWidth, `${date} A-open ${g.id}`).toBeLessThanOrEqual(ROOM_A.teachGapMax);
+          expect(Math.abs(g.baseCenter - CX), `${date} A-open off ${g.id}`).toBeGreaterThanOrEqual(
             ROOM_A.teachMinOffset - 1,
           );
         } else {
-          expect(g.gapWidth, `${date} A-pinch ${g.id}`).toBeLessThanOrEqual(ROOM_A.gapMax);
-          expect(Math.abs(g.baseCenter - CX), `${date} A-pinch ${g.id}`).toBeGreaterThan(g.gapWidth / 2 - 5);
+          expect(g.gapWidth, `${date} A-weave ${g.id}`).toBeGreaterThanOrEqual(ROOM_A.gapMin);
+          expect(g.gapWidth, `${date} A-weave ${g.id}`).toBeLessThanOrEqual(ROOM_A.gapMax);
+          expect(Math.abs(g.baseCenter - CX), `${date} A-weave off ${g.id}`).toBeGreaterThanOrEqual(40);
         }
       }
       for (const g of b) {
@@ -165,24 +164,27 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     }
   });
 
-  it("lets center-hold live through Room A teach, then CX-kills in the pinch", () => {
+  it("lets center-hold live through all of Room A, then CX-kills in Room B", () => {
     for (const date of DATES) {
       const world = simulateCenterHold(dailySeed(date), true);
-      const teach = scoringGates(world.course).filter((g) => isRoomATeachLip(g.y));
-      expect(teach.length, date).toBeGreaterThan(0);
+      const roomA = scoringGates(world.course).filter((g) => isRoomALiveOpening(g.y));
+      expect(roomA.length, date).toBeGreaterThanOrEqual(3);
+      for (const g of roomA) {
+        expect(openingIncludesCx(g.left, g.right), `${date} A CX ${g.id}`).toBe(true);
+      }
       expect(world.alive, date).toBe(false);
-      expect(world.distance, date).toBeGreaterThan(teach[teach.length - 1]!.y);
-      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd - 1);
+      expect(world.distance, date).toBeGreaterThan(roomA[roomA.length - 1]!.y);
+      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd);
       expect(world.distance, date).toBeLessThan(DIST.roomBEnd);
       expect(checkCourseLayout(world.course), date).toEqual([]);
     }
   });
 
-  it("scores 0 for a center through of Room A teach lips (PR1 skim-only)", () => {
+  it("scores 0 for a center through of Room A (PR1 skim-only)", () => {
     for (const date of DATES) {
       const world = createWorld(dailySeed(date), { daily: true, reducedMotion: true });
-      const teach = scoringGates(world.course).filter((g) => isRoomATeachLip(g.y));
-      const lastTeach = teach[teach.length - 1]!;
+      const roomA = scoringGates(world.course).filter((g) => isRoomALiveOpening(g.y));
+      const lastA = roomA[roomA.length - 1]!;
       const cap = Math.ceil(40 / TICK);
       for (let i = 0; i < cap; i++) {
         updateWorld(
@@ -196,17 +198,17 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
           },
           TICK,
         );
-        if (!world.alive || world.distance > lastTeach.y + 20) break;
+        if (!world.alive || world.distance > lastA.y + 20) break;
       }
       expect(world.alive, date).toBe(true);
-      expect(world.distance, date).toBeGreaterThan(lastTeach.y);
+      expect(world.distance, date).toBeGreaterThan(lastA.y);
       expect(world.skimEvents, date).toBe(0);
       expect(worldScore(world), date).toBe(0);
       expect(world.cleanPasses, date).toBeGreaterThan(0);
     }
   });
 
-  it("lets a timid weave+Brake clear the first Room A teach lip", () => {
+  it("lets a timid weave+Brake clear the first Room A opening", () => {
     const timidWeave = (seed: number, daily: boolean) => {
       const world = createWorld(seed, {
         daily,
@@ -250,23 +252,29 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
     }
   });
 
-  it("lets weave+Brake finish a short Endless through Room A", () => {
-    for (const seed of ENDLESS_SEEDS) {
+  it("lets weave+Brake clear Room A (soft-friends: reach Room B)", () => {
+    const runWeaveBrake = (seed: number) => {
       const world = createWorld(seed, {
         daily: false,
         reducedMotion: true,
         variant: "brake",
-        endlessHorizon: DIST.roomAEnd + 80,
+        endlessHorizon: DIST.roomBEnd,
       });
       const gates = scoringGates(world.course).filter((g) => roomAt(g.y) === "A");
-      expect(gates[0]!.y, `endless ${seed} first lip`).toBeGreaterThanOrEqual(DIST.openEnd);
-      expect(gates[0]!.y / BASE_SPEED, `endless ${seed} open`).toBeGreaterThanOrEqual(800 / 90);
-      expect(gates[0]!.gapWidth, `endless ${seed} teach`).toBeGreaterThanOrEqual(ROOM_A.teachGapMin);
-      expect(gates[0]!.gapWidth, `endless ${seed} teach`).toBeLessThanOrEqual(ROOM_A.teachGapMax);
-      expect(openingIncludesCx(gates[0]!.left, gates[0]!.right), `endless ${seed} CX`).toBe(true);
+      expect(gates.length, `seed ${seed} A count`).toBeGreaterThanOrEqual(3);
+      expect(gates[0]!.y, `seed ${seed} first lip`).toBeGreaterThanOrEqual(DIST.openEnd);
+      expect(gates[0]!.y / BASE_SPEED, `seed ${seed} open`).toBeGreaterThanOrEqual(800 / 90);
+      expect(gates[0]!.gapWidth, `seed ${seed} first`).toBeGreaterThanOrEqual(ROOM_A.teachGapMin);
+      expect(gates[0]!.gapWidth, `seed ${seed} first`).toBeLessThanOrEqual(ROOM_A.teachGapMax);
       const calmDy = gates[1]!.y - gates[0]!.y;
-      expect(calmDy, `endless ${seed} calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
-      expect(calmDy, `endless ${seed} calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
+      expect(calmDy, `seed ${seed} calm`).toBeGreaterThanOrEqual(ROOM_A.calmGapMin);
+      expect(calmDy, `seed ${seed} calm`).toBeLessThanOrEqual(ROOM_A.calmGapMax);
+      for (const g of gates) {
+        expect(openingIncludesCx(g.left, g.right), `seed ${seed} A CX ${g.id}`).toBe(true);
+      }
+      const firstB = scoringGates(world.course).find((g) => roomAt(g.y) === "B");
+      expect(firstB, `seed ${seed} Room B`).toBeTruthy();
+      expect(openingIncludesCx(firstB!.left, firstB!.right), `seed ${seed} B CX-kill`).toBe(false);
 
       const cap = Math.ceil(90 / TICK);
       for (let i = 0; i < cap; i++) {
@@ -285,8 +293,40 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
         );
         if (!world.alive || world.distance >= DIST.roomAEnd) break;
       }
+      return world;
+    };
+
+    for (const seed of ENDLESS_SEEDS) {
+      const world = runWeaveBrake(seed);
       expect(world.alive, `endless ${seed}`).toBe(true);
       expect(world.distance, `endless ${seed}`).toBeGreaterThanOrEqual(DIST.roomAEnd);
+      expect(roomAt(world.distance), `endless ${seed} room`).toBe("B");
+    }
+    for (const date of DATES) {
+      const world = createWorld(dailySeed(date), {
+        daily: true,
+        reducedMotion: true,
+        variant: "brake",
+      });
+      const cap = Math.ceil(90 / TICK);
+      for (let i = 0; i < cap; i++) {
+        const look = sampleWalls(world.course.keyframes, world.distance + 16);
+        updateWorld(
+          world,
+          {
+            steer: 0,
+            pointerActive: true,
+            pointerX: (look.left + look.right) / 2,
+            restart: false,
+            toTitle: false,
+            brake: world.distance >= DIST.openEnd,
+          },
+          TICK,
+        );
+        if (!world.alive || world.distance >= DIST.roomAEnd) break;
+      }
+      expect(world.alive, date).toBe(true);
+      expect(world.distance, date).toBeGreaterThanOrEqual(DIST.roomAEnd);
     }
   });
 

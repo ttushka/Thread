@@ -1,8 +1,8 @@
 export const FIELD_W = 360;
 export const FIELD_H = 640;
 /**
- * Playfield centerline. Scoring gates sit off this line (L/R silhouette),
- * but Room A teach openings still *include* CX so a center hold lives.
+ * Playfield centerline. Scoring gates sit off this line (L/R silhouette).
+ * First-minute Room A openings still *include* CX so a center hold lives.
  */
 export const CX = FIELD_W / 2;
 
@@ -83,36 +83,29 @@ export function roomAt(y: number): CourseRoom {
 }
 
 /**
- * Room A — two generator phases after the open rest (not another openEnd knob).
+ * Room A — first-minute openings all include CX (SOFT-FRIENDS-ROOM-A-ALL-SURVIVE).
  *
- *   TEACH  — first `teachCount` scoring lips, or y < `teachEnd` (union).
- *            Openings **include CX** so center can live. PR1 score stays
- *            skim-only (a center through scores 0).
- *   PINCH  — after that window (later Room A / Room B+). minOffset + killOff
- *            so holding CX is death.
+ *   OPEN   — first `firstCount` scoring lip, wide teach gap. CX lives.
+ *   WEAVE  — later first-minute A: pinch silhouette (tighter L/R), still
+ *            **cxLive** so center can live. PR1 score stays skim-only
+ *            (a center through scores 0).
  *
- * Soft-friends v1–v3 kept CX-kill on the first weave. Skim-only score already
- * makes center worthless; early Room A must not also CX-kill.
- *
- * Knobs: `teachCount` (first N lips) and `teachEnd` (Y / seconds at 90 u/s).
- * `teachEnd` is the 15s Room A mark, so first-minute scoring Room A is teach
- * (~6s of scoring after the 9s open; ~15s of the run). Later Endless A omits
- * these knobs and uses the pinch band only.
+ * Hard CX-kill (`minOffset` ~80 + killOff) starts at **Room B+** and on
+ * later Endless A — not mid–Room A. PR #33's teach window still slammed
+ * that kill at ~teachEnd / 15s (first Room B lip); this pass keeps the
+ * whole first-minute A pocket survivable.
  *
  * Pacing (v3 silhouette, not CX-kill): 1 close first lip, then calm ≥250.
- * A 180–220 opening covers CX on FIELD_W=360; pinch stays ≤166 / minOffset 80.
+ * A 180–220 opening covers CX on FIELD_W=360; pinch look stays ≤166.
  */
 export const ROOM_A = {
+  /** Later first-minute A silhouette + later Endless A hard pinch. */
   gapMin: 150,
   gapMax: 166,
-  /** First N scoring lips of first-minute Room A — CX-live teach. */
-  teachCount: 4,
-  /** Y cutoff (union with teachCount). 1350 = 15s = DIST.roomAEnd. */
-  teachEnd: DIST.roomAEnd,
-  /** Teach openings — wide enough that CX lives (not the old 168–170 kill ceiling). */
+  /** Wide first opening — CX lives (not the old 168–170 kill ceiling). */
   teachGapMin: 196,
   teachGapMax: 220,
-  /** Visible L/R offset; clamped so x=CX is not a nick or death. */
+  /** Visible L/R offset on the first lip; clamped so x=CX is not a nick or death. */
   teachMinOffset: 40,
   teachOffJitter: 8,
   firstCount: 1,
@@ -122,7 +115,7 @@ export const ROOM_A = {
   /** Distance after the first teach lip before the next scoring lip. */
   calmGapMin: 250,
   calmGapMax: 260,
-  /** Hard pinch after the teach window / later Endless A. */
+  /** Hard CX-kill offset — Room B+ / later Endless A only, never first-minute A. */
   minOffset: 80,
   offJitter: 8,
   stepMin: 104,
@@ -131,12 +124,13 @@ export const ROOM_A = {
   holdMax: 52,
 } as const;
 
-/** First-minute Room A teach lip: y in [openEnd, teachEnd) or first `teachCount`. */
-export function isRoomATeachLip(y: number, roomAIndex = 0): boolean {
-  if (y < DIST.openEnd || y >= DIST.roomAEnd) return false;
-  if (y < ROOM_A.teachEnd) return true;
-  return roomAIndex < ROOM_A.teachCount;
+/** First-minute Room A scoring opening — every one includes CX. */
+export function isRoomALiveOpening(y: number): boolean {
+  return y >= DIST.openEnd && y < DIST.roomAEnd;
 }
+
+/** @deprecated Use `isRoomALiveOpening` — first-minute A is entirely CX-live. */
+export const isRoomATeachLip = isRoomALiveOpening;
 
 /** Opening includes the centerline — thread at `x` is not a wall/gate death. */
 export function openingIncludesCx(left: number, right: number, x = CX): boolean {

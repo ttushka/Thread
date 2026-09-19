@@ -93,21 +93,25 @@ describe("Daily clear path", () => {
     expect(world.alive).toBe(false);
     const snap = game.snapshot();
     expect(snap.overlayReady).toBe(true);
-    expect(snap.shareLine).toMatch(/beat my time/);
-    expect(snap.shareLine).not.toMatch(/beat my score/);
+    expect(snap.shareLine).toMatch(/cleared \d+:\d{2}/);
+    expect(snap.shareLine).toMatch(/play:/);
+    expect(snap.shareLine).not.toMatch(/beat my/i);
     game.tick({ ...idle, restart: true }, TICK);
     expect(game.screen).toBe("play");
     expect(game.mode).toBe("daily");
     expect(game.dateKey).toBe("2026-09-17");
   });
 
-  it("death share asks to beat the score, not a time", () => {
+  it("death share is a score invite, not a time challenge", () => {
     const game = new Game(new MemoryStorage());
     game.startDaily("2026-09-17");
     game.world!.alive = false;
     game.tick(idle, TICK);
     expect(game.screen).toBe("dead");
-    expect(game.snapshot().shareLine).toMatch(/beat my score/);
+    expect(game.snapshot().shareLine).toMatch(/^Thread Daily 2026-09-17 — score /);
+    expect(game.snapshot().shareLine).toMatch(/play:/);
+    expect(game.snapshot().shareLine).not.toMatch(/cleared/i);
+    expect(game.snapshot().shareLine).not.toMatch(/beat my/i);
     expect(game.snapshot().shareLine).not.toMatch(/\btime\b/i);
   });
 });
@@ -139,6 +143,7 @@ describe("sound setting", () => {
     world.x = 8;
     game.tick({ ...idle, pointerActive: true, pointerX: 8 }, TICK);
     expect(game.screen).toBe("dead");
+    expect(game.snapshot().shareLine).toBeNull();
     expect(game.drainSfx()).toEqual(["death"]);
     game.tick(idle, TICK);
     expect(game.drainSfx()).toEqual([]);

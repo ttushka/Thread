@@ -157,10 +157,10 @@ btnShare.addEventListener("click", async () => {
     await navigator.clipboard.writeText(line);
     btnShare.textContent = "Copied";
     window.setTimeout(() => {
-      btnShare.textContent = "Copy challenge";
+      btnShare.textContent = "Copy invite";
     }, 1400);
   } catch {
-    window.prompt("Copy challenge", line);
+    window.prompt("Copy invite", line);
   }
 });
 

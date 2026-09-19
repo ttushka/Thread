@@ -12,11 +12,12 @@ describe("share line", () => {
       cleared: true,
     });
     expect(line).toBe(
-      "Thread Daily 2026-09-17 — 12,340/0:42 · seed 000abc12 · beat my time: https://example.com/thread/?daily=2026-09-17",
+      "Thread Daily 2026-09-17 — cleared 0:42 · score 12,340 · seed 000abc12 · play: https://example.com/thread/?daily=2026-09-17",
     );
+    expect(line).not.toMatch(/beat my/i);
   });
 
-  it("says beat my score on a score-based death run", () => {
+  it("omits time on a snagged Daily run", () => {
     const line = formatDailyShare({
       dateKey: "2026-09-17",
       score: 3911,
@@ -26,9 +27,11 @@ describe("share line", () => {
       cleared: false,
     });
     expect(line).toBe(
-      "Thread Daily 2026-09-17 — 3,911 · seed 000abc12 · beat my score: https://example.com/thread/?daily=2026-09-17",
+      "Thread Daily 2026-09-17 — score 3,911 · seed 000abc12 · play: https://example.com/thread/?daily=2026-09-17",
     );
     expect(line).not.toMatch(/\btime\b/i);
+    expect(line).not.toMatch(/beat my/i);
+    expect(line).not.toMatch(/cleared/i);
   });
 
   it("falls back to a query hook when the public URL is unknown", () => {
@@ -38,7 +41,7 @@ describe("share line", () => {
       timeMs: 1500,
       seed: 1,
     });
-    expect(line).toContain("Thread Daily 2026-09-17 — 10 · seed 00000001 · beat my score: ?daily=2026-09-17");
+    expect(line).toContain("Thread Daily 2026-09-17 — score 10 · seed 00000001 · play: ?daily=2026-09-17");
   });
 
   it("formats time and seed tags", () => {

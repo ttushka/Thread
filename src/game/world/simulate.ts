@@ -120,8 +120,8 @@ function cue(world: World, id: SfxCue): void {
 type ObstacleRuntime = ObstacleSpec & {
   passed: boolean;
   nicked: boolean;
-  /** True if the thread entered this lip's near-miss band. */
-  skimmed: boolean;
+  /** True if the thread entered this lip's near-miss band. Omitted in older fixtures = through. */
+  skimmed?: boolean;
 };
 
 function damp(current: number, target: number, lambda: number, dt: number): number {

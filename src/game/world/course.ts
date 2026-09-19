@@ -357,6 +357,8 @@ type LipRoom = {
   firstGapMin?: number;
   firstGapMax?: number;
   firstCount?: number;
+  firstStepMin?: number;
+  firstStepMax?: number;
 };
 
 /**
@@ -415,13 +417,18 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     let placed = 0;
     while (y < until) {
       const first = room.firstCount !== undefined && placed < room.firstCount;
-      const step = lipStep(rng, room.stepMin, room.stepMax);
+      const betweenFirst =
+        first && placed > 0 && room.firstStepMin !== undefined && room.firstStepMax !== undefined;
+      const step = betweenFirst
+        ? lipStep(rng, room.firstStepMin!, room.firstStepMax!)
+        : lipStep(rng, room.stepMin, room.stepMax);
       if (plannedGateY(step) >= until) break;
       const gapMin = first ? (room.firstGapMin ?? room.gapMin) : room.gapMin;
       const gapMax = first ? (room.firstGapMax ?? room.gapMax) : room.gapMax;
       pushGate(gapMin, gapMax, room.minOffset, room.offJitter, step);
       placed += 1;
-      if (room.holdMin !== undefined && room.holdMax !== undefined) {
+      const stillFirst = room.firstCount !== undefined && placed < room.firstCount;
+      if (!stillFirst && room.holdMin !== undefined && room.holdMax !== undefined) {
         const hold = rng.float(room.holdMin, room.holdMax);
         if (y + hold < until) pushHold(hold);
       }

@@ -42,53 +42,78 @@ export const STEER_KEY_TAP_CAP = 0.35;
 export const WALL_MARGIN = 14;
 export const KEYFRAME_PAD = 80;
 
-/** First-minute distance marks at 90 u/s. */
+/**
+ * First-minute distance marks at 90 u/s.
+ * Room A 0–15s, Room B 15–40s, Room C 40–60s (BIG-FEEL-REDESIGN PR2).
+ * `rhythmEnd` aliases Room C so first-minute tests keep a 60s name.
+ */
 export const DIST = {
-  openEnd: 450,
-  pinchEnd: 1800,
-  moverEnd: 3600,
+  openEnd: 360,
+  roomAEnd: 1350,
+  roomBEnd: 3600,
+  roomCEnd: 5400,
   rhythmEnd: 5400,
   dailyFinish: 5580,
 } as const;
 
+export type CourseRoom = "open" | "A" | "B" | "C" | "endless";
+
+export function roomAt(y: number): CourseRoom {
+  if (y < DIST.openEnd) return "open";
+  if (y < DIST.roomAEnd) return "A";
+  if (y < DIST.roomBEnd) return "B";
+  if (y < DIST.roomCEnd) return "C";
+  return "endless";
+}
+
 /**
- * CORE-LOOP-SKIM-NATIVE-v1 Slice A — first ~40s Endless/Daily (openEnd→moverEnd).
- * Density +1 notch vs prior 105–125 / 110–135. Offset +1 notch vs 52 / 58.
- * Steps stay ≥ LIP_TELEGRAPH_MIN_S at BASE_SPEED (no snap-shut).
+ * Room A — Pinch teach (0–15s). Wide corridor, scoring lips offset so CX is
+ * dead. Soft-friends weave into the pocket; holding center dies.
+ * Gap stays under ~170 so wall-margin still allows a CX-kill offset.
  */
-export const EARLY_PINCH = {
-  gapMin: 118,
-  gapMax: 142,
-  minOffset: 58,
-  offJitter: 14,
-  stepMin: 90,
+export const ROOM_A = {
+  gapMin: 150,
+  gapMax: 166,
+  minOffset: 80,
+  offJitter: 8,
+  stepMin: 104,
+  stepMax: 128,
+  holdMin: 36,
+  holdMax: 52,
+} as const;
+
+/**
+ * Room B — Weave corridor (15–40s). Alternating L/R, tighter so the center
+ * line nicks or scores nothing. Agency weave, not a sine farm.
+ */
+export const ROOM_B = {
+  gapMin: 94,
+  gapMax: 112,
+  minOffset: 68,
+  offJitter: 10,
+  stepMin: 92,
   stepMax: 110,
-} as const;
-
-export const EARLY_MOVER_BAND = {
-  gapMin: 110,
-  gapMax: 136,
-  minOffset: 64,
-  offJitter: 12,
-  stepMin: 95,
-  stepMax: 120,
+  holdMin: 28,
+  holdMax: 44,
 } as const;
 
 /**
- * CORE-LOOP-SKIM-NATIVE-v1 Slice C — movers as mid-spice, not lottery spikes.
- * Two placements in the 20–40s band (~2× vs the old single special). Spacing
- * stays well above LIP_TELEGRAPH_MIN_S so they season the weave, not stack.
+ * Room C — Mover gauntlet (40–60s+). Cluster of 4 readable movers.
+ * Spacing stays well above LIP_TELEGRAPH_MIN_S; mid difficulty; Brake assist OK.
  */
-export const MOVER_BAND = {
-  count: 2,
-  /** First mover offset from pinchEnd (same window as the old single special). */
-  firstMin: 280,
-  firstMax: 520,
-  /** Gap from first mover to second (~8–11s at BASE_SPEED). */
-  spacingMin: 720,
-  spacingMax: 980,
-  /** Keep the last mover inside moverEnd with rest room. */
-  tailPad: 160,
+export const ROOM_C = {
+  count: 4,
+  firstMin: 160,
+  firstMax: 260,
+  spacingMin: 240,
+  spacingMax: 340,
+  tailPad: 140,
+  gapMin: 102,
+  gapMax: 122,
+  minOffset: 64,
+  offJitter: 10,
+  stepMin: 100,
+  stepMax: 122,
 } as const;
 
 /**

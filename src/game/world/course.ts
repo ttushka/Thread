@@ -5,14 +5,14 @@ import {
   BASE_SPEED,
   CX,
   DIST,
-  EARLY_MOVER_BAND,
-  EARLY_PINCH,
   FIELD_W,
   GATE_LIP_THICKNESS,
   KEYFRAME_PAD,
   LIP_TELEGRAPH_MIN_S,
-  MOVER_BAND,
   MOVER_MOTION,
+  ROOM_A,
+  ROOM_B,
+  ROOM_C,
   THREAD_RADIUS,
   WALL_MARGIN,
 } from "./constants.ts";
@@ -282,13 +282,29 @@ function placeMover(rng: Rng, y: number, side: number, nextId: () => number): Ob
   return spec;
 }
 
-/** Two Ys in pinchEnd→moverEnd, ≥ telegraph apart. Shared by Control and Beat. */
-function planMoverBandYs(rng: Rng): number[] {
-  const first = DIST.pinchEnd + rng.float(MOVER_BAND.firstMin, MOVER_BAND.firstMax);
-  const spaced = first + rng.float(MOVER_BAND.spacingMin, MOVER_BAND.spacingMax);
-  const second = Math.min(DIST.moverEnd - MOVER_BAND.tailPad, spaced);
-  const ys = [first];
-  if (second - first >= BASE_SPEED * LIP_TELEGRAPH_MIN_S) ys.push(second);
+/** Room C gauntlet Ys in [start, end], ≥ telegraph apart. Shared by Control and Beat. */
+function planGauntletYs(rng: Rng, start: number, end: number, count: number = ROOM_C.count): number[] {
+  const floor = BASE_SPEED * LIP_TELEGRAPH_MIN_S;
+  const span = Math.max(0, end - start);
+  const pad = Math.min(ROOM_C.tailPad, Math.max(48, span * 0.1));
+  const lastAllowed = end - pad;
+  const packed = (lastAllowed - start - 80) / Math.max(1, count - 1);
+  const spacing = Math.max(floor, Math.min(rng.float(ROOM_C.spacingMin, ROOM_C.spacingMax), packed));
+  const firstHi = Math.min(start + ROOM_C.firstMax, lastAllowed - (count - 1) * spacing);
+  const firstLo = Math.min(start + ROOM_C.firstMin, firstHi);
+  let y = rng.float(Math.max(start + 40, firstLo), Math.max(firstLo, firstHi));
+  const ys: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (y > lastAllowed) break;
+    ys.push(y);
+    y += spacing;
+  }
+  while (ys.length < Math.min(3, count)) {
+    const last = ys[ys.length - 1] ?? start + 80;
+    const next = last + floor;
+    if (next > end - 20) break;
+    ys.push(next);
+  }
   return ys;
 }
 
@@ -321,10 +337,30 @@ export type CourseOptions = {
 /**
  * Deterministic course. All randomness from `seed` via mulberry32.
  * Daily finish is a soft landing after the authored first minute.
+ * Control / Brake share this path; Beat only snaps scoring-lip Y to the grid.
  */
 export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
-  if (opts.variant === "beat") return generateBeatCourse(seed, opts);
+  if (opts.variant === "beat") return generateAnalogCourse(seed, opts, true);
   if (opts.variant === "lanes") return generateLanesCourse(seed, opts);
+  return generateAnalogCourse(seed, opts, false);
+}
+
+type LipRoom = {
+  gapMin: number;
+  gapMax: number;
+  minOffset: number;
+  offJitter: number;
+  stepMin: number;
+  stepMax: number;
+  holdMin?: number;
+  holdMax?: number;
+};
+
+/**
+ * Room A/B/C first minute, then Endless stays in that vocabulary.
+ * Beat: scoring-lip *spacing* snaps to the metronome; movers stay off-grid.
+ */
+function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean): CourseSpec {
   const rng = new Rng(seed);
   const keyframes: WallKeyframe[] = [];
   const obstacles: ObstacleSpec[] = [];
@@ -333,156 +369,6 @@ export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
   let y = -KEYFRAME_PAD;
   let center = CX;
   /** Weave side for scoring gates. Chosen once at openEnd, then flips every scoring gate. */
-  let side: -1 | 1 = 1;
-
-  const pushRest = (gapMin: number, gapMax: number, wander: number, dy: number) => {
-    y += dy;
-    const placed = placeRest(rng, y, gapMin, gapMax, wander, center);
-    center = placed.center;
-    keyframes.push(placed.kf);
-  };
-
-  const pushGate = (
-    gapMin: number,
-    gapMax: number,
-    minOffset: number,
-    offJitter: number,
-    dy: number,
-  ) => {
-    y += dy;
-    const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId);
-    side = -side as -1 | 1;
-    center = placed.center;
-    keyframes.push(placed.kf);
-    obstacles.push(placed.spec);
-  };
-
-  // 0–5s: soft teach. Wide corridor, gentle wander, not scoring gates.
-  keyframes.push({
-    y: -KEYFRAME_PAD,
-    left: 40,
-    right: FIELD_W - 40,
-    gateId: null,
-  });
-  while (y < DIST.openEnd) {
-    pushRest(260, 300, 16, rng.float(70, 90));
-  }
-  side = rng.pick([-1, 1] as const);
-
-  // 5–20s: first pinches. Forced weave; holding CX dies. Slice A: denser + further off CX.
-  while (y < DIST.pinchEnd) {
-    const step = lipStep(rng, EARLY_PINCH.stepMin, EARLY_PINCH.stepMax);
-    if (y + step >= DIST.pinchEnd) break;
-    pushGate(EARLY_PINCH.gapMin, EARLY_PINCH.gapMax, EARLY_PINCH.minOffset, EARLY_PINCH.offJitter, step);
-  }
-
-  // 20–40s: readable pinches + two movers (Slice C mid-spice). Center punish only if already closed at −0.6s.
-  const moverYs = planMoverBandYs(rng);
-  let moverIdx = 0;
-  while (y < DIST.moverEnd) {
-    const step = lipStep(rng, EARLY_MOVER_BAND.stepMin, EARLY_MOVER_BAND.stepMax);
-    const nextMoverY = moverYs[moverIdx];
-    if (nextMoverY !== undefined && y + step >= nextMoverY) {
-      y = nextMoverY;
-      center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
-      moverIdx += 1;
-      continue;
-    }
-    if (y + step >= DIST.moverEnd) break;
-    pushGate(
-      EARLY_MOVER_BAND.gapMin,
-      EARLY_MOVER_BAND.gapMax,
-      EARLY_MOVER_BAND.minOffset,
-      EARLY_MOVER_BAND.offJitter,
-      step,
-    );
-  }
-  while (moverIdx < moverYs.length) {
-    obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
-    moverIdx += 1;
-  }
-  if (y < DIST.moverEnd) {
-    pushRest(188, 220, 16, DIST.moverEnd - y);
-  }
-
-  // 40–60s: exactly 3 rhythm gates, then a soft rest.
-  for (let i = 0; i < 3; i++) {
-    pushGate(96, 118, 64, 10, rng.float(88, 108));
-  }
-  while (y < DIST.rhythmEnd) {
-    pushRest(210, 240, 12, rng.float(90, 120));
-  }
-
-  let finishY: number | null = null;
-  if (opts.daily) {
-    // Soft land into a finish line — same for a given seed, fair snag if you miss the rest.
-    pushRest(210, 240, 12, 90);
-    finishY = DIST.dailyFinish;
-    keyframes.push({
-      y: finishY + KEYFRAME_PAD,
-      left: 48,
-      right: FIELD_W - 48,
-      gateId: null,
-    });
-  } else {
-    const horizon = opts.endlessHorizon ?? DIST.rhythmEnd + 24000;
-    let segment = 0;
-    while (y < horizon) {
-      segment += 1;
-      const knob = (segment - 1) % 3;
-      const tighten = Math.min(36, segment * 3);
-      const gapMin = Math.max(78, 118 - tighten);
-      const gapMax = Math.max(gapMin + 12, 150 - tighten);
-      const minOffset = Math.min(72, 52 + segment * 2);
-      const spacing = knob === 1 ? rng.float(78, 96) : rng.float(96, 124);
-      const end = y + 900;
-      let lastMover = y - 400;
-      while (y < end && y < horizon) {
-        if (knob === 2 && y - lastMover > rng.float(380, 560)) {
-          const my = y + rng.float(40, 80);
-          obstacles.push(placeMover(rng, my, side, nextId));
-          lastMover = my;
-          y = my;
-          const around = placeRest(rng, y, gapMin + 40, gapMax + 50, 16, center);
-          center = around.center;
-          keyframes.push(around.kf);
-          continue;
-        }
-        pushGate(gapMin, gapMax, minOffset, 12, spacing);
-      }
-    }
-    keyframes.push({
-      y: y + KEYFRAME_PAD,
-      left: keyframes[keyframes.length - 1]!.left,
-      right: keyframes[keyframes.length - 1]!.right,
-      gateId: null,
-    });
-  }
-
-  obstacles.sort((a, b) => a.y - b.y || a.id - b.id);
-  keyframes.sort((a, b) => a.y - b.y);
-
-  return {
-    seed: seed >>> 0,
-    daily: opts.daily,
-    finishY,
-    keyframes,
-    obstacles,
-  };
-}
-
-/**
- * Same weave / agency offsets as control. Only scoring-lip *spacing* snaps to
- * the metronome grid, with a minimum one-beat gap. Movers stay off-grid.
- */
-function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
-  const rng = new Rng(seed);
-  const keyframes: WallKeyframe[] = [];
-  const obstacles: ObstacleSpec[] = [];
-  let nextIdNum = 1;
-  const nextId = () => nextIdNum++;
-  let y = -KEYFRAME_PAD;
-  let center = CX;
   let side: -1 | 1 = 1;
   let lastLipY = 0;
 
@@ -493,6 +379,13 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
     keyframes.push(placed.kf);
   };
 
+  const pushHold = (dy: number) => {
+    if (dy <= 0) return;
+    y += dy;
+    const last = keyframes[keyframes.length - 1]!;
+    keyframes.push({ y, left: last.left, right: last.right, gateId: null });
+  };
+
   const pushGate = (
     gapMin: number,
     gapMax: number,
@@ -500,8 +393,12 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
     offJitter: number,
     dy: number,
   ) => {
-    y = quantizeLipY(y + dy, lastLipY);
-    lastLipY = y;
+    if (beat) {
+      y = quantizeLipY(y + dy, lastLipY);
+      lastLipY = y;
+    } else {
+      y += dy;
+    }
     const placed = placeScoringGate(rng, y, gapMin, gapMax, minOffset, offJitter, side, nextId);
     side = -side as -1 | 1;
     center = placed.center;
@@ -509,6 +406,46 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
     obstacles.push(placed.spec);
   };
 
+  const plannedGateY = (dy: number) => (beat ? quantizeLipY(y + dy, lastLipY) : y + dy);
+
+  const fillLipRoom = (until: number, room: LipRoom) => {
+    while (y < until) {
+      const step = lipStep(rng, room.stepMin, room.stepMax);
+      if (plannedGateY(step) >= until) break;
+      pushGate(room.gapMin, room.gapMax, room.minOffset, room.offJitter, step);
+      if (room.holdMin !== undefined && room.holdMax !== undefined) {
+        const hold = rng.float(room.holdMin, room.holdMax);
+        if (y + hold < until) pushHold(hold);
+      }
+    }
+  };
+
+  const fillMoverGauntlet = (until: number, count: number) => {
+    const moverYs = planGauntletYs(rng, y, until, count);
+    let moverIdx = 0;
+    while (y < until) {
+      const step = lipStep(rng, ROOM_C.stepMin, ROOM_C.stepMax);
+      const nextY = plannedGateY(step);
+      const nextMoverY = moverYs[moverIdx];
+      if (nextMoverY !== undefined && nextY >= nextMoverY) {
+        y = nextMoverY;
+        center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
+        moverIdx += 1;
+        continue;
+      }
+      if (nextY >= until) break;
+      pushGate(ROOM_C.gapMin, ROOM_C.gapMax, ROOM_C.minOffset, ROOM_C.offJitter, step);
+    }
+    while (moverIdx < moverYs.length) {
+      obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
+      moverIdx += 1;
+    }
+    if (y < until) {
+      pushRest(188, 220, 16, until - y);
+    }
+  };
+
+  // Soft open: wide rest, not scoring. Room A scoring starts after this.
   keyframes.push({
     y: -KEYFRAME_PAD,
     left: 40,
@@ -520,46 +457,20 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
   }
   side = rng.pick([-1, 1] as const);
 
-  while (y < DIST.pinchEnd) {
-    const step = lipStep(rng, EARLY_PINCH.stepMin, EARLY_PINCH.stepMax);
-    if (y + step >= DIST.pinchEnd) break;
-    pushGate(EARLY_PINCH.gapMin, EARLY_PINCH.gapMax, EARLY_PINCH.minOffset, EARLY_PINCH.offJitter, step);
+  // Room A 0–15s: wide pinch teach — CX is dead; weave to skim.
+  fillLipRoom(DIST.roomAEnd, ROOM_A);
+  if (y < DIST.roomAEnd) {
+    pushRest(ROOM_A.gapMin, ROOM_A.gapMax, 12, DIST.roomAEnd - y);
   }
 
-  const moverYs = planMoverBandYs(rng);
-  let moverIdx = 0;
-  while (y < DIST.moverEnd) {
-    const step = lipStep(rng, EARLY_MOVER_BAND.stepMin, EARLY_MOVER_BAND.stepMax);
-    const nextMoverY = moverYs[moverIdx];
-    if (nextMoverY !== undefined && y + step >= nextMoverY) {
-      y = nextMoverY;
-      center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
-      moverIdx += 1;
-      continue;
-    }
-    if (y + step >= DIST.moverEnd) break;
-    pushGate(
-      EARLY_MOVER_BAND.gapMin,
-      EARLY_MOVER_BAND.gapMax,
-      EARLY_MOVER_BAND.minOffset,
-      EARLY_MOVER_BAND.offJitter,
-      step,
-    );
-  }
-  while (moverIdx < moverYs.length) {
-    obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
-    moverIdx += 1;
-  }
-  if (y < DIST.moverEnd) {
-    pushRest(188, 220, 16, DIST.moverEnd - y);
+  // Room B 15–40s: tighter L/R weave corridor. No movers.
+  fillLipRoom(DIST.roomBEnd, ROOM_B);
+  if (y < DIST.roomBEnd) {
+    pushRest(ROOM_B.gapMin + 20, ROOM_B.gapMax + 30, 12, DIST.roomBEnd - y);
   }
 
-  for (let i = 0; i < 3; i++) {
-    pushGate(96, 118, 64, 10, rng.float(88, 108));
-  }
-  while (y < DIST.rhythmEnd) {
-    pushRest(210, 240, 12, rng.float(90, 120));
-  }
+  // Room C 40–60s: readable mover gauntlet (3+). Telegraph ≥0.6s.
+  fillMoverGauntlet(DIST.roomCEnd, ROOM_C.count);
 
   let finishY: number | null = null;
   if (opts.daily) {
@@ -572,30 +483,20 @@ function generateBeatCourse(seed: number, opts: CourseOptions): CourseSpec {
       gateId: null,
     });
   } else {
-    const horizon = opts.endlessHorizon ?? DIST.rhythmEnd + 24000;
+    const horizon = opts.endlessHorizon ?? DIST.roomCEnd + 24000;
     let segment = 0;
     while (y < horizon) {
       segment += 1;
       const knob = (segment - 1) % 3;
-      const tighten = Math.min(36, segment * 3);
-      const gapMin = Math.max(78, 118 - tighten);
-      const gapMax = Math.max(gapMin + 12, 150 - tighten);
-      const minOffset = Math.min(72, 52 + segment * 2);
-      const spacing = knob === 1 ? rng.float(78, 96) : rng.float(96, 124);
-      const end = y + 900;
-      let lastMover = y - 400;
-      while (y < end && y < horizon) {
-        if (knob === 2 && y - lastMover > rng.float(380, 560)) {
-          const my = y + rng.float(40, 80);
-          obstacles.push(placeMover(rng, my, side, nextId));
-          lastMover = my;
-          y = my;
-          const around = placeRest(rng, y, gapMin + 40, gapMax + 50, 16, center);
-          center = around.center;
-          keyframes.push(around.kf);
-          continue;
-        }
-        pushGate(gapMin, gapMax, minOffset, 12, spacing);
+      const end = Math.min(y + 960, horizon);
+      if (knob === 0) {
+        fillLipRoom(end, ROOM_A);
+        if (y < end) pushRest(ROOM_A.gapMin, ROOM_A.gapMax, 12, end - y);
+      } else if (knob === 1) {
+        fillLipRoom(end, ROOM_B);
+        if (y < end) pushRest(ROOM_B.gapMin + 16, ROOM_B.gapMax + 24, 12, end - y);
+      } else {
+        fillMoverGauntlet(end, 3);
       }
     }
     keyframes.push({
@@ -676,42 +577,52 @@ function generateLanesCourse(seed: number, opts: CourseOptions): CourseSpec {
   }
   side = rng.pick([-1, 1] as const);
 
-  // First pinches: 1-lane blocks (readable), then 2-lane weave so center dies.
-  while (y < DIST.pinchEnd) {
+  // Room A: 1-lane blocks (wide pocket). Room B: 2-lane weave (center dies).
+  while (y < DIST.roomAEnd) {
     const step = rng.float(118, 148);
-    if (y + step >= DIST.pinchEnd) break;
-    pushLip(step, y > DIST.openEnd + 720);
+    if (y + step >= DIST.roomAEnd) break;
+    pushLip(step, false);
   }
 
-  const moverAt = DIST.pinchEnd + rng.float(280, 520);
-  let moverPlaced = false;
-  while (y < DIST.moverEnd) {
+  while (y < DIST.roomBEnd) {
     const step = rng.float(120, 150);
-    if (!moverPlaced && y + step >= moverAt) {
-      y = moverAt;
-      const spec = placeLaneLip(y, blockPattern(side, false), nextId, "mover");
-      obstacles.push(spec);
-      keyframes.push(wide(y));
-      moverPlaced = true;
-      continue;
-    }
-    if (y + step >= DIST.moverEnd) break;
+    if (y + step >= DIST.roomBEnd) break;
     pushLip(step, true);
   }
-  if (!moverPlaced) {
-    const spec = placeLaneLip(DIST.pinchEnd + 360, blockPattern(side, false), nextId, "mover");
-    obstacles.push(spec);
-  }
-  if (y < DIST.moverEnd) {
-    y = DIST.moverEnd;
+  if (y < DIST.roomBEnd) {
+    y = DIST.roomBEnd;
     keyframes.push(wide(y));
   }
 
+  // Room C: 3+ lane movers, same time band as analog gauntlet.
+  const moverYs: number[] = [];
+  let moverY = DIST.roomBEnd + rng.float(ROOM_C.firstMin, ROOM_C.firstMax);
   for (let i = 0; i < 3; i++) {
-    pushLip(rng.float(96, 120), true);
+    if (i > 0) moverY += rng.float(ROOM_C.spacingMin, ROOM_C.spacingMax);
+    if (moverY <= DIST.roomCEnd - ROOM_C.tailPad) moverYs.push(moverY);
   }
-  while (y < DIST.rhythmEnd) {
-    y += rng.float(90, 120);
+  let moverIdx = 0;
+  while (y < DIST.roomCEnd) {
+    const step = rng.float(96, 120);
+    const nextMoverY = moverYs[moverIdx];
+    if (nextMoverY !== undefined && y + step >= nextMoverY) {
+      y = nextMoverY;
+      const spec = placeLaneLip(y, blockPattern(side, false), nextId, "mover");
+      obstacles.push(spec);
+      keyframes.push(wide(y));
+      moverIdx += 1;
+      continue;
+    }
+    if (y + step >= DIST.roomCEnd) break;
+    pushLip(step, true);
+  }
+  while (moverIdx < moverYs.length) {
+    const spec = placeLaneLip(moverYs[moverIdx]!, blockPattern(side, false), nextId, "mover");
+    obstacles.push(spec);
+    moverIdx += 1;
+  }
+  if (y < DIST.roomCEnd) {
+    y = DIST.roomCEnd;
     keyframes.push(wide(y));
   }
 
@@ -722,24 +633,35 @@ function generateLanesCourse(seed: number, opts: CourseOptions): CourseSpec {
     finishY = DIST.dailyFinish;
     keyframes.push(wide(finishY + KEYFRAME_PAD));
   } else {
-    const horizon = opts.endlessHorizon ?? DIST.rhythmEnd + 24000;
+    const horizon = opts.endlessHorizon ?? DIST.roomCEnd + 24000;
     let segment = 0;
     while (y < horizon) {
       segment += 1;
-      const twoLane = true;
-      const spacing = segment >= 4 ? rng.float(78, 100) : rng.float(96, 124);
-      const end = y + 900;
-      let lastMover = y - 400;
-      while (y < end && y < horizon) {
-        if (y - lastMover > rng.float(420, 620)) {
-          y += rng.float(40, 80);
-          const spec = placeLaneLip(y, blockPattern(side, segment >= 3), nextId, "mover");
-          obstacles.push(spec);
-          keyframes.push(wide(y));
-          lastMover = y;
-          continue;
+      const knob = (segment - 1) % 3;
+      const spacing = knob === 0 ? rng.float(118, 148) : rng.float(96, 124);
+      const end = Math.min(y + 960, horizon);
+      if (knob === 2) {
+        let placed = 0;
+        let lastMover = y - 200;
+        while (y < end) {
+          if (placed < 3 && y - lastMover > rng.float(ROOM_C.spacingMin, ROOM_C.spacingMax)) {
+            y += rng.float(40, 80);
+            if (y >= end) break;
+            const spec = placeLaneLip(y, blockPattern(side, false), nextId, "mover");
+            obstacles.push(spec);
+            keyframes.push(wide(y));
+            lastMover = y;
+            placed += 1;
+            continue;
+          }
+          if (y + spacing >= end) break;
+          pushLip(spacing, true);
         }
-        pushLip(spacing, twoLane);
+      } else {
+        while (y < end) {
+          if (y + spacing >= end) break;
+          pushLip(spacing, knob === 1);
+        }
       }
     }
     keyframes.push(wide(y + KEYFRAME_PAD));

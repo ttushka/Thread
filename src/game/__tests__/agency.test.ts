@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dailySeed } from "../seed.ts";
 import { generateCourse } from "../world/course.ts";
 import { checkCourseLayout, scoringGates, simulateCenterHold } from "../world/agency.ts";
-import { BASE_SPEED, CX, DIST, EARLY_MOVER_BAND, EARLY_PINCH, LIP_TELEGRAPH_MIN_S, MOVER_BAND, MOVER_MOTION } from "../world/constants.ts";
+import { BASE_SPEED, CX, DIST, LIP_TELEGRAPH_MIN_S, ROOM_A, ROOM_B, ROOM_C, MOVER_MOTION } from "../world/constants.ts";
 
 const DATES = ["2026-09-17", "2026-09-18", "2026-01-01", "2026-12-31", "2027-06-06"];
 const ENDLESS_SEEDS = [1, 42, 0x4eadc0de, 0xc0ffee];
@@ -22,7 +22,7 @@ describe("Daily agency validators", () => {
     for (const date of DATES) {
       const world = simulateCenterHold(dailySeed(date), true);
       expect(world.distance, date).toBeGreaterThan(DIST.openEnd);
-      expect(world.distance, date).toBeLessThan(DIST.pinchEnd);
+      expect(world.distance, date).toBeLessThan(DIST.roomAEnd);
     }
   });
 
@@ -44,38 +44,36 @@ describe("Daily agency validators", () => {
     }
   });
 
-  it("raises first-40s lip density one notch without breaking telegraph", () => {
-    expect(EARLY_PINCH.stepMin).toBe(90);
-    expect(EARLY_PINCH.stepMax).toBe(110);
-    expect(EARLY_MOVER_BAND.stepMin).toBe(95);
-    expect(EARLY_MOVER_BAND.stepMax).toBe(120);
-    expect(EARLY_PINCH.minOffset).toBe(58);
-    expect(EARLY_MOVER_BAND.minOffset).toBe(64);
+  it("keeps Room A/B lips telegraphed and dense enough to force skim", () => {
+    expect(ROOM_A.stepMin).toBe(104);
+    expect(ROOM_B.stepMin).toBe(92);
+    expect(ROOM_A.minOffset).toBe(80);
+    expect(ROOM_B.minOffset).toBe(68);
     expect(LIP_TELEGRAPH_MIN_S).toBe(0.6);
-    expect(EARLY_PINCH.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
-    expect(EARLY_MOVER_BAND.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+    expect(ROOM_A.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+    expect(ROOM_B.stepMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
 
     for (const date of DATES) {
       const course = generateCourse(dailySeed(date), { daily: true });
-      const early = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.moverEnd);
-      expect(early.length, date).toBeGreaterThanOrEqual(20);
-      for (let i = 1; i < early.length; i++) {
-        const dy = early[i]!.y - early[i - 1]!.y;
+      const weave = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y < DIST.roomBEnd);
+      expect(weave.length, date).toBeGreaterThanOrEqual(12);
+      for (let i = 1; i < weave.length; i++) {
+        const dy = weave[i]!.y - weave[i - 1]!.y;
         expect(dy / BASE_SPEED, date).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S - 1e-6);
       }
     }
     for (const seed of ENDLESS_SEEDS) {
-      const course = generateCourse(seed, { daily: false, endlessHorizon: 4000 });
-      const early = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y <= DIST.moverEnd);
-      expect(early.length, String(seed)).toBeGreaterThanOrEqual(20);
+      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.roomBEnd + 200 });
+      const weave = scoringGates(course).filter((g) => g.y >= DIST.openEnd && g.y < DIST.roomBEnd);
+      expect(weave.length, String(seed)).toBeGreaterThanOrEqual(12);
     }
   });
 
-  it("places two readable-mid movers in the 20–40s band without snap-shut", () => {
-    expect(MOVER_BAND.count).toBe(2);
-    expect(MOVER_BAND.firstMin).toBe(280);
-    expect(MOVER_BAND.firstMax).toBe(520);
-    expect(MOVER_BAND.spacingMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
+  it("places the Room C mover gauntlet without snap-shut", () => {
+    expect(ROOM_C.count).toBe(4);
+    expect(ROOM_C.firstMin).toBe(160);
+    expect(ROOM_C.firstMax).toBe(260);
+    expect(ROOM_C.spacingMin / BASE_SPEED).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
     expect(MOVER_MOTION.amplitudeMin).toBe(48);
     expect(MOVER_MOTION.amplitudeMax).toBe(64);
     expect(MOVER_MOTION.amplitudeRetryCap).toBe(72);
@@ -87,11 +85,11 @@ describe("Daily agency validators", () => {
       expect(checkCourseLayout(course), date).toEqual([]);
     }
     for (const seed of ENDLESS_SEEDS) {
-      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.moverEnd + 200 });
+      const course = generateCourse(seed, { daily: false, endlessHorizon: DIST.roomCEnd + 200 });
       const movers = course.obstacles
-        .filter((o) => o.kind === "mover" && o.y >= DIST.pinchEnd && o.y <= DIST.moverEnd)
+        .filter((o) => o.kind === "mover" && o.y >= DIST.roomBEnd && o.y <= DIST.roomCEnd)
         .sort((a, b) => a.y - b.y);
-      expect(movers.length, String(seed)).toBe(MOVER_BAND.count);
+      expect(movers.length, String(seed)).toBe(ROOM_C.count);
       expect((movers[1]!.y - movers[0]!.y) / BASE_SPEED, String(seed)).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
     }
   });

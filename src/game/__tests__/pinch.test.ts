@@ -9,7 +9,7 @@ import {
   FIELD_W,
   GATE_LIP_THICKNESS,
   LIP_TELEGRAPH_MIN_S,
-  MOVER_BAND,
+  ROOM_C,
   POINTER_LERP,
   STEER_SPEED,
   TICK,
@@ -90,19 +90,19 @@ describe("pinch readability — static lips", () => {
     }
   });
 
-  it("keeps movers as mid-spice seasoning, not the common beat", () => {
+  it("keeps Rooms A/B as static weave and Room C as the mover gauntlet", () => {
     const course = generateCourse(dailySeed("2026-09-17"), { daily: true });
     const firstMinute = course.obstacles.filter((o) => o.y <= DIST.rhythmEnd);
     const gates = firstMinute.filter((o) => o.kind === "gate");
     const movers = firstMinute.filter((o) => o.kind === "mover");
     expect(gates.length).toBeGreaterThanOrEqual(8);
-    expect(movers.length).toBe(MOVER_BAND.count);
-    expect(gates.length).toBeGreaterThan(movers.length * 3);
+    expect(movers.length).toBe(ROOM_C.count);
+    expect(movers.every((m) => m.y >= DIST.roomBEnd)).toBe(true);
 
-    const early = gates.filter((g) => g.y <= DIST.moverEnd);
-    expect(early.length).toBeGreaterThanOrEqual(20);
-    for (let i = 1; i < early.length; i++) {
-      expect((early[i]!.y - early[i - 1]!.y) / BASE_SPEED).toBeGreaterThanOrEqual(
+    const weave = gates.filter((g) => g.y < DIST.roomBEnd);
+    expect(weave.length).toBeGreaterThanOrEqual(12);
+    for (let i = 1; i < weave.length; i++) {
+      expect((weave[i]!.y - weave[i - 1]!.y) / BASE_SPEED).toBeGreaterThanOrEqual(
         LIP_TELEGRAPH_MIN_S - 1e-6,
       );
     }

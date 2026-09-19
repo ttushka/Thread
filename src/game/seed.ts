@@ -46,7 +46,7 @@ function utf8Bytes(input: string): Uint8Array {
  * Bump only when generation rules change. Mid-day bumps break Daily continuity —
  * do it in the same PR as golden fixture updates.
  */
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 
 export const DAILY_PREFIX = "thread-daily-";
 

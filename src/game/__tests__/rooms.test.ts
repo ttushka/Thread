@@ -19,7 +19,7 @@ import {
   TICK,
   roomAt,
 } from "../world/constants.ts";
-import { generateCourse, isMoverSnapPhase } from "../world/course.ts";
+import { generateCourse, isMoverSnapPhase, sampleWalls } from "../world/course.ts";
 import { checkCourseLayout, scoringGates, simulateCenterHold } from "../world/agency.ts";
 import { createWorld, updateWorld } from "../world/simulate.ts";
 
@@ -185,6 +185,36 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
       const { world, first } = timidWeave(dailySeed(date), true);
       expect(world.alive, date).toBe(true);
       expect(world.distance, date).toBeGreaterThan(first.y);
+    }
+  });
+
+  it("lets weave+Brake finish a short Endless through Room A", () => {
+    for (const seed of ENDLESS_SEEDS) {
+      const world = createWorld(seed, {
+        daily: false,
+        reducedMotion: true,
+        variant: "brake",
+        endlessHorizon: DIST.roomAEnd + 80,
+      });
+      const cap = Math.ceil(90 / TICK);
+      for (let i = 0; i < cap; i++) {
+        const look = sampleWalls(world.course.keyframes, world.distance + 16);
+        updateWorld(
+          world,
+          {
+            steer: 0,
+            pointerActive: true,
+            pointerX: (look.left + look.right) / 2,
+            restart: false,
+            toTitle: false,
+            brake: world.distance >= DIST.openEnd,
+          },
+          TICK,
+        );
+        if (!world.alive || world.distance >= DIST.roomAEnd) break;
+      }
+      expect(world.alive, `endless ${seed}`).toBe(true);
+      expect(world.distance, `endless ${seed}`).toBeGreaterThanOrEqual(DIST.roomAEnd);
     }
   });
 

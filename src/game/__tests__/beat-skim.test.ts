@@ -162,6 +162,18 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.cleanAward).toBeGreaterThan(CLEAN_AWARD);
     expect(world.beatStreak).toBe(1);
     expect(world.beatHeat).toBeCloseTo(beatIntensityFromStreak(1), 8);
+  });
+
+  it("does not latch a skim-teach event on a centered Perfect with no near-miss", () => {
+    const y = beatDistance() * Math.ceil((DIST.openEnd + 80) / beatDistance());
+    const world = worldWith("beat", 180, [onBeatGate(1, y)]);
+    world.x = 180;
+    world.prevX = 180;
+    crossAt(world, y);
+    expect(world.cleanPasses).toBe(1);
+    expect(world.perfects).toBe(1);
+    expect(world.beatStreak).toBe(1);
+    expect(world.nearMissTimer).toBe(0);
     expect(world.beatSkimEvent).toBe(false);
   });
 

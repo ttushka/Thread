@@ -57,8 +57,11 @@ export const KEYFRAME_PAD = 80;
  * `rhythmEnd` aliases Room C so first-minute tests keep a 60s name.
  */
 export const DIST = {
-  /** Soft-friends Room A fix: 5.0s safe open (was 4.0s / 360). */
-  openEnd: 450,
+  /**
+   * Soft-friends Room A fix v2: ~6.5s safe open before scoring
+   * (v1 was 5.0s / 450; floor is 6.0s / 540).
+   */
+  openEnd: 585,
   roomAEnd: 1350,
   roomBEnd: 3600,
   roomCEnd: 5400,
@@ -80,17 +83,22 @@ export function roomAt(y: number): CourseRoom {
  * Room A — Pinch teach (0–15s). Wide corridor, scoring lips offset so CX is
  * dead (center scores nothing / nicks). Soft-friends weave into the pocket;
  * holding center still dies.
- * First-cluster gaps sit at the CX-kill ceiling (~170) so a small weave+Brake
- * can clear the opening pinch. Later Room A stays the same silhouette, just
- * shy of that ceiling. Wall-margin still allows a CX-kill offset.
+ *
+ * First cluster (v2): 2 lips, openings at the CX-kill ceiling (~170). A 180–190
+ * *opening* would always cover CX on FIELD_W=360, so 180–190 is the spacing
+ * between those two lips (learnable L/R, not machine-gun). Later Room A
+ * tightens back to gapMin/stepMin. Wall-margin still allows a CX-kill offset.
  */
 export const ROOM_A = {
   gapMin: 150,
   gapMax: 166,
   /** First lips after the open — wide enough for weave+Brake, still CX-dead. */
-  firstGapMin: 164,
+  firstGapMin: 168,
   firstGapMax: 170,
-  firstCount: 3,
+  firstCount: 2,
+  /** Spacing between the two first-cluster lips (not the approach to lip 1). */
+  firstStepMin: 180,
+  firstStepMax: 190,
   minOffset: 80,
   offJitter: 8,
   stepMin: 104,

@@ -53,7 +53,7 @@ describe("parseVariant", () => {
     expect(VARIANT_TEACH.control).toBe(CONTROL_TEACH);
     expect(EXPERIMENT_TEACH_COPY.control).toBe(CONTROL_TEACH);
     expect(VARIANT_TEACH.brake).toBe("Hold Brake (or Space) to slow. Steer the gaps.");
-    expect(VARIANT_TEACH.beat).toBe("Thread each lip on the pulse. Works with click off.");
+    expect(VARIANT_TEACH.beat).toBe("Skim the wall on the pulse \u2014 that\u2019s the craft. Click optional.");
     expect(VARIANT_TEACH.lanes).toBe("Swipe or tap sides to change lane. Stay in the open one.");
   });
 
@@ -74,6 +74,8 @@ describe("parseVariant", () => {
 
     game.setVariant("brake");
     expect(game.snapshot().teach).toBe(VARIANT_TEACH.brake);
+    game.setVariant("beat");
+    expect(game.snapshot().teach).toBe(VARIANT_TEACH.beat);
     game.setVariant("control");
     expect(game.snapshot().teach).toBe(VARIANT_TEACH.control);
   });

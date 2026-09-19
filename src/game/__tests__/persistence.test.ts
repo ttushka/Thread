@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SAVE_KEY,
   BRAKE_SKIM_TEACH_KEY,
+  BEAT_SKIM_TEACH_KEY,
   dailyAttemptsFor,
   dailyBestFor,
   loadSave,
@@ -14,6 +15,8 @@ import {
   brakeHudPos,
   brakeSkimTeachSeen,
   markBrakeSkimTeachSeen,
+  beatSkimTeachSeen,
+  markBeatSkimTeachSeen,
   writeSave,
   type StorageLike,
 } from "../persistence.ts";
@@ -127,5 +130,20 @@ describe("thread.v1 persistence", () => {
     expect(brakeSkimTeachSeen(s)).toBe(true);
     s.setItem(BRAKE_SKIM_TEACH_KEY, "");
     expect(brakeSkimTeachSeen(s)).toBe(false);
+  });
+
+  it("persists Beat skim teach as a dedicated key, independent of thread.v1", () => {
+    const s = new MemoryStorage();
+    expect(BEAT_SKIM_TEACH_KEY).toBe("thread.v1.beatSkimTeachSeen");
+    expect(beatSkimTeachSeen(s)).toBe(false);
+    markBeatSkimTeachSeen(s);
+    expect(s.getItem(BEAT_SKIM_TEACH_KEY)).toBe("1");
+    expect(beatSkimTeachSeen(s)).toBe(true);
+    expect(s.getItem(SAVE_KEY)).toBeNull();
+    expect(s.getItem(BRAKE_SKIM_TEACH_KEY)).toBeNull();
+    s.setItem(SAVE_KEY, JSON.stringify({ v: 1, endlessBest: 9, daily: { dateKey: "", best: 0 } }));
+    expect(beatSkimTeachSeen(s)).toBe(true);
+    s.setItem(BEAT_SKIM_TEACH_KEY, "");
+    expect(beatSkimTeachSeen(s)).toBe(false);
   });
 });

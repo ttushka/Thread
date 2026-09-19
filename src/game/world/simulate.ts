@@ -81,6 +81,8 @@ export type World = {
   brakeSkimPulse: boolean;
   /** Edge for Game: a Brake skim fired this tick. */
   brakeSkimEvent: boolean;
+  /** Edge for Game: an on-pulse Beat skim credited this tick. */
+  beatSkimEvent: boolean;
   laneIndex: number;
   laneFromX: number;
   laneToX: number;
@@ -246,6 +248,7 @@ export function createWorld(
     braking: false,
     brakeSkimPulse: false,
     brakeSkimEvent: false,
+    beatSkimEvent: false,
     laneIndex,
     laneFromX: x,
     laneToX: x,
@@ -280,13 +283,14 @@ function syncBeatHeat(world: World, dt: number): void {
 }
 
 /** One streak tick per beat index. Shared by Perfect and on-pulse skim. */
-function creditBeatStreak(world: World): void {
-  if (world.variant !== "beat") return;
+function creditBeatStreak(world: World): boolean {
+  if (world.variant !== "beat") return false;
   const index = nearestBeatIndex(world.time);
-  if (world.beatCreditIndex === index) return;
+  if (world.beatCreditIndex === index) return false;
   world.beatCreditIndex = index;
   world.beatStreak = Math.min(BEAT_STREAK_CAP, world.beatStreak + 1);
   world.beatHeat = Math.max(world.beatHeat, beatIntensityFromStreak(world.beatStreak));
+  return true;
 }
 
 export function updateWorld(world: World, intent: Intent, dt: number): void {
@@ -308,6 +312,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.prevDistance = world.distance;
   world.braking = false;
   world.brakeSkimEvent = false;
+  world.beatSkimEvent = false;
   world.beatClick = false;
 
   if (world.variant === "lanes") {
@@ -470,7 +475,9 @@ function pulseNearMiss(world: World): void {
   cue(world, "tension");
   if (!world.reducedMotion) spawnNearMissParticles(world);
   // BEAT-SKIM-MASTERY-v1: juice uses current heat; credit after so this skim does not double.
-  if (world.variant === "beat" && isSkimTiming(world.time)) creditBeatStreak(world);
+  if (world.variant === "beat" && isSkimTiming(world.time) && creditBeatStreak(world)) {
+    world.beatSkimEvent = true;
+  }
 }
 
 /** Visual near-miss heat. Brake skim uses a modest cap; Beat uses streak heat. */

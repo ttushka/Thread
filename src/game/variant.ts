@@ -37,6 +37,11 @@ export const BRAKE_SKIM_TEACH = "Skim while slow — that's the craft.";
 export const BRAKE_SKIM_TEACH_S = 3.5;
 export const BRAKE_SKIM_TEACH_FADE_S = 0.5;
 
+/** BEAT-TEACH-SKIM-ON-PULSE-v1 — copy only; skim credit (#17) unchanged. */
+export const BEAT_SKIM_TEACH = "Skim on the pulse \u2014 that\u2019s the craft.";
+export const BEAT_SKIM_TEACH_S = 3.5;
+export const BEAT_SKIM_TEACH_FADE_S = 0.5;
+
 export function beatIntensityFromStreak(streak: number): number {
   if (!Number.isFinite(streak) || streak <= 0) return 0;
   return Math.min(streak, BEAT_STREAK_CAP) / BEAT_STREAK_CAP;
@@ -76,6 +81,15 @@ export function brakeSkimTeachOpacity(ageS: number): number {
   return 1 - t;
 }
 
+/** Beat skim teach: same hold-then-fade family. Total ~3.5s. */
+export function beatSkimTeachOpacity(ageS: number): number {
+  const hold = BEAT_SKIM_TEACH_S - BEAT_SKIM_TEACH_FADE_S;
+  if (ageS <= hold) return 1;
+  const t = (ageS - hold) / BEAT_SKIM_TEACH_FADE_S;
+  if (t >= 1) return 0;
+  return 1 - t;
+}
+
 export const LANE_X = [90, 180, 270] as const;
 export const LANE_COUNT = 3;
 export const LANE_W = 120;
@@ -93,7 +107,7 @@ export const VARIANT_LABEL: Record<ExperimentVariant, string> = {
 export const VARIANT_TEACH: Record<ExperimentVariant, string> = {
   control: "Steer through the lips. Don’t touch the walls.",
   brake: "Hold Brake (or Space) to slow. Steer the gaps.",
-  beat: "Thread each lip on the pulse. Works with click off.",
+  beat: "Skim the wall on the pulse \u2014 that\u2019s the craft. Click optional.",
   lanes: "Swipe or tap sides to change lane. Stay in the open one.",
 };
 

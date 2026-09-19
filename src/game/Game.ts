@@ -15,12 +15,23 @@ import {
   writeSave,
   brakeSkimTeachSeen,
   markBrakeSkimTeachSeen,
+  beatSkimTeachSeen,
+  markBeatSkimTeachSeen,
 } from "./persistence.ts";
 import { dailyRunSeed } from "./modes/daily.ts";
 import { endlessSeed } from "./modes/endless.ts";
 import { utcDateKey } from "./seed.ts";
 import { formatDailyShare, dailyDeepLink } from "./share.ts";
-import { VARIANT_LABEL, VARIANT_TEACH, inRunTeachOpacity, brakeSkimTeachOpacity, BRAKE_SKIM_TEACH, type ExperimentVariant } from "./variant.ts";
+import {
+  VARIANT_LABEL,
+  VARIANT_TEACH,
+  inRunTeachOpacity,
+  brakeSkimTeachOpacity,
+  beatSkimTeachOpacity,
+  BRAKE_SKIM_TEACH,
+  BEAT_SKIM_TEACH,
+  type ExperimentVariant,
+} from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
 import {
   RECURRENCE_LINE,
@@ -81,6 +92,9 @@ export class Game {
   /** Age in seconds while Brake skim teach is showing; `done` until the next run. */
   private brakeSkimTeach: { age: number } | "done" | null = null;
   private brakeSkimTeachSeen = false;
+  /** Age in seconds while Beat skim teach is showing; `done` until the next run. */
+  private beatSkimTeach: { age: number } | "done" | null = null;
+  private beatSkimTeachSeen = false;
   private playDays: string[] = [];
   private playDayNoted = false;
 
@@ -90,6 +104,7 @@ export class Game {
     this.injectedEndless = opts?.endlessSeed;
     if (opts?.variant) this.variant = opts.variant;
     this.brakeSkimTeachSeen = brakeSkimTeachSeen(storage);
+    this.beatSkimTeachSeen = beatSkimTeachSeen(storage);
     this.playDays = loadPlayDays(storage);
   }
 
@@ -161,12 +176,14 @@ export class Game {
     this.ended = false;
     this.restartQueued = false;
     this.brakeSkimTeach = null;
+    this.beatSkimTeach = null;
   }
 
   private beginRun(): void {
     this.ended = false;
     this.restartQueued = false;
     this.brakeSkimTeach = null;
+    this.beatSkimTeach = null;
     this.playDayNoted = false;
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
@@ -192,8 +209,12 @@ export class Game {
     if (this.world && (this.screen === "play" || this.screen === "dead" || this.screen === "cleared")) {
       updateWorld(this.world, this.screen === "play" ? intent : idleIntent(), dt);
       this.takeSfx();
-      if (this.screen === "play") this.stepBrakeSkimTeach(dt);
+      if (this.screen === "play") {
+        this.stepBrakeSkimTeach(dt);
+        this.stepBeatSkimTeach(dt);
+      }
       this.noteBrakeSkim();
+      this.noteBeatSkim();
     }
 
     if (this.screen === "play" && this.world) {
@@ -238,6 +259,22 @@ export class Game {
     if (brakeSkimTeachOpacity(this.brakeSkimTeach.age) <= 0) this.brakeSkimTeach = "done";
   }
 
+  private noteBeatSkim(): void {
+    if (!this.world?.beatSkimEvent) return;
+    this.world.beatSkimEvent = false;
+    if (this.variant !== "beat") return;
+    if (this.beatSkimTeachSeen) return;
+    this.beatSkimTeachSeen = true;
+    markBeatSkimTeachSeen(this.storage);
+    this.beatSkimTeach = { age: 0 };
+  }
+
+  private stepBeatSkimTeach(dt: number): void {
+    if (!this.beatSkimTeach || this.beatSkimTeach === "done") return;
+    this.beatSkimTeach.age += dt;
+    if (beatSkimTeachOpacity(this.beatSkimTeach.age) <= 0) this.beatSkimTeach = "done";
+  }
+
   private finishRun(kind: "dead" | "cleared"): void {
     if (this.ended || !this.world) return;
     this.ended = true;
@@ -271,12 +308,19 @@ export class Game {
         : null;
 
     const skimTeach = this.brakeSkimTeach;
+    const beatTeach = this.beatSkimTeach;
     let teach = VARIANT_TEACH[this.variant];
     let teachOpacity = this.screen === "play" && world ? inRunTeachOpacity(world.time) : 0;
     if (this.screen === "play" && skimTeach && skimTeach !== "done") {
       teach = BRAKE_SKIM_TEACH;
       teachOpacity = brakeSkimTeachOpacity(skimTeach.age);
     } else if (skimTeach === "done") {
+      teachOpacity = 0;
+    }
+    if (this.screen === "play" && beatTeach && beatTeach !== "done") {
+      teach = BEAT_SKIM_TEACH;
+      teachOpacity = beatSkimTeachOpacity(beatTeach.age);
+    } else if (beatTeach === "done") {
       teachOpacity = 0;
     }
 

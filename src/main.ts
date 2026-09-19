@@ -39,6 +39,7 @@ const hudEl = must("#hud");
 const hudMode = must("#hud-mode");
 const hudScore = must("#hud-score");
 const hudCombo = must("#hud-combo");
+const hudThrough = must("#hud-through");
 const hudBest = must("#hud-best");
 const hudVariant = must("#hud-variant");
 const hudTeach = must("#hud-teach");
@@ -350,11 +351,21 @@ function paintChrome(force = false): void {
   if (!onTitle) {
     hudMode.textContent = snap.mode === "daily" ? `Daily Challenge · ${snap.dateKey}` : "Endless";
     hudScore.textContent = snap.score.toLocaleString("en-US");
+    hudScore.classList.toggle("empty", snap.score <= 0);
+    hudScore.classList.toggle("tick", snap.scoreTick);
+    if (snap.throughFlash) {
+      hudThrough.hidden = false;
+      hudThrough.textContent = "through";
+    } else {
+      hudThrough.hidden = true;
+    }
     if (snap.combo >= 2) {
       hudCombo.hidden = false;
       hudCombo.textContent = `combo ${snap.combo}`;
+      hudCombo.classList.toggle("has-through", snap.throughFlash);
     } else {
       hudCombo.hidden = true;
+      hudCombo.classList.remove("has-through");
     }
     const best = snap.mode === "daily" ? snap.dailyBest : snap.endlessBest;
     hudBest.textContent = best > 0 ? `best ${best.toLocaleString("en-US")}` : "";
@@ -377,7 +388,11 @@ function paintChrome(force = false): void {
     resultHeading.textContent = snap.score.toLocaleString("en-US");
     const secs = (snap.timeMs / 1000).toFixed(1);
     const perfectBit = snap.variant === "beat" ? ` · ${snap.perfects} perfect` : "";
-    resultSub.textContent = `${Math.floor(snap.distance)} distance · ${snap.cleanPasses} clean${perfectBit} · combo peak ${snap.comboPeak} · ${secs}s`;
+    if (snap.noSkimResult) {
+      resultSub.textContent = snap.noSkimResult;
+    } else {
+      resultSub.textContent = `${Math.floor(snap.distance)} distance · ${snap.skimEvents} skims · ${snap.cleanPasses} through${perfectBit} · combo peak ${snap.comboPeak} · ${secs}s`;
+    }
     if (snap.shareLine) {
       resultShare.classList.remove("hidden");
       resultShare.textContent = snap.shareLine;

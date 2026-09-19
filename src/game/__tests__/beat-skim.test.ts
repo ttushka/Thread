@@ -5,9 +5,10 @@ import {
   BEAT_SKIM_TEACH_KEY,
   beatSkimTeachSeen,
   markBeatSkimTeachSeen,
+  markSkimScoreTeachSeen,
   type StorageLike,
 } from "../persistence.ts";
-import { CLEAN_AWARD, cleanPassAward } from "../score.ts";
+import { skimAward } from "../score.ts";
 import {
   BEAT_SKIM_MS,
   BEAT_SKIM_EARLY_MS,
@@ -162,8 +163,9 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.cleanPasses).toBe(1);
     expect(world.perfects).toBe(1);
     expect(world.sfx).toContain("tension");
-    expect(world.cleanAward).toBe(cleanPassAward(1));
-    expect(world.cleanAward).toBeGreaterThan(CLEAN_AWARD);
+    expect(world.obstacles[0]!.skimmed).toBe(true);
+    expect(world.skimCash).toBe(skimAward(1));
+    expect(world.combo).toBe(1);
     expect(world.beatStreak).toBe(1);
     expect(world.beatHeat).toBeCloseTo(beatIntensityFromStreak(1), 8);
   });
@@ -177,6 +179,8 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.cleanPasses).toBe(1);
     expect(world.perfects).toBe(1);
     expect(world.beatStreak).toBe(1);
+    expect(world.combo).toBe(0);
+    expect(world.skimCash).toBe(0);
     expect(world.nearMissTimer).toBe(0);
     expect(world.beatSkimEvent).toBe(false);
   });
@@ -374,6 +378,7 @@ describe("BEAT-TEACH-SKIM-ON-PULSE-v1 teach", () => {
   it("does not re-show after the flag is set, including a new session", () => {
     const storage = new MemoryStorage();
     markBeatSkimTeachSeen(storage);
+    markSkimScoreTeachSeen(storage);
     const game = skimBeatGame(storage);
     expect(game.snapshot().teach).toBe(VARIANT_TEACH.beat);
     expect(game.snapshot().teachOpacity).toBe(1);
@@ -411,6 +416,7 @@ describe("BEAT-TEACH-SKIM-ON-PULSE-v1 teach", () => {
 
   it("does not fire teach or flag on Control, Brake, or an off-pulse skim", () => {
     const storage = new MemoryStorage();
+    markSkimScoreTeachSeen(storage);
     for (const variant of ["control", "brake"] as const) {
       const game = new Game(storage, { endlessSeed: 1, variant });
       game.startEndless();

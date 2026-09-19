@@ -1,6 +1,6 @@
 import type { CourseSpec, ObstacleSpec, Particle, SfxCue } from "../../types.ts";
 import type { Intent } from "../../types.ts";
-import { cleanPassAward, computeScore } from "../score.ts";
+import { skimAward, computeScore } from "../score.ts";
 import type { ExperimentVariant } from "../variant.ts";
 import {
   BRAKE_SLOW,
@@ -18,7 +18,6 @@ import {
 import { isPerfectTiming, isSkimTiming, nearestBeatIndex, beatPulseAmp } from "./beat.ts";
 import {
   BASE_SPEED,
-  CLEAN_PASS_FLASH_MS,
   DEATH_DISSOLVE_MS,
   DEATH_FLASH_MS,
   DEATH_FREEZE_MS,
@@ -38,6 +37,7 @@ import {
   TENSION_GAIN_LOCK_MS,
   TENSION_HOLD_MS,
   THREAD_RADIUS,
+  THROUGH_FLASH_MS,
   TRAIL_MAX,
 } from "./constants.ts";
 import { classifyGapHit, hitObstacle, type Hit } from "./collision.ts";
@@ -63,7 +63,16 @@ export type World = {
   combo: number;
   comboPeak: number;
   cleanPasses: number;
-  cleanAward: number;
+  /** Accumulated skim / Tension cash. Center-clean does not add here. */
+  skimCash: number;
+  /** Successful near-miss pulses this run. Gates the distance multiplier. */
+  skimEvents: number;
+  /** Gray HUD "through" flash after a center-clean lip. */
+  throughTimer: number;
+  /** Edge for HUD: a center-clean lip this tick. */
+  throughEvent: boolean;
+  /** Edge for HUD: skim score ticked this tick. */
+  scoreTickEvent: boolean;
   perfects: number;
   perfectFlash: number;
   lastPerfectId: number;
@@ -91,7 +100,7 @@ export type World = {
   laneToX: number;
   /** 0..1, 1 = settled. Invuln while < 1. */
   laneLerp: number;
-  /** Almost-miss stacks. Cap 3. Cashed on the next Clean Pass. Death clears. Nick does not. */
+  /** Almost-miss stacks. Cap 3. Cashed on the next skim-gated lip. Death clears. Nick does not. */
   tension: number;
   tensionTimer: number;
   tensionGainLock: number;
@@ -111,6 +120,8 @@ function cue(world: World, id: SfxCue): void {
 type ObstacleRuntime = ObstacleSpec & {
   passed: boolean;
   nicked: boolean;
+  /** True if the thread entered this lip's near-miss band. */
+  skimmed: boolean;
 };
 
 function damp(current: number, target: number, lambda: number, dt: number): number {
@@ -202,7 +213,10 @@ function applyLaneTension(world: World, gap: { left: number; right: number }, ob
   if (world.distance < obs.y - half || world.distance > obs.y + half) return;
   const lane = laneIndexFromX(world.x);
   if (laneIsBlockedByGap(lane, gap)) return;
-  if (neighborLaneBlocked(lane, gap)) pulseNearMiss(world);
+  if (neighborLaneBlocked(lane, gap)) {
+    obs.skimmed = true;
+    pulseNearMiss(world);
+  }
 }
 
 export function createWorld(
@@ -239,7 +253,11 @@ export function createWorld(
     combo: 0,
     comboPeak: 0,
     cleanPasses: 0,
-    cleanAward: 0,
+    skimCash: 0,
+    skimEvents: 0,
+    throughTimer: 0,
+    throughEvent: false,
+    scoreTickEvent: false,
     perfects: 0,
     perfectFlash: 0,
     lastPerfectId: 0,
@@ -264,13 +282,13 @@ export function createWorld(
     trail: seedTrail(x),
     particles: [],
     reducedMotion: opts.reducedMotion,
-    obstacles: course.obstacles.map((o) => ({ ...o, passed: false, nicked: false })),
+    obstacles: course.obstacles.map((o) => ({ ...o, passed: false, nicked: false, skimmed: false })),
     sfx: [],
   };
 }
 
 export function worldScore(world: World): number {
-  return computeScore(world.distance, world.cleanAward, world.comboPeak, world.perfects);
+  return computeScore(world.distance, world.skimCash, world.comboPeak, world.skimEvents);
 }
 
 function syncBeatHeat(world: World, dt: number): void {
@@ -317,6 +335,8 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
   world.braking = false;
   world.brakeSkimEvent = false;
   world.beatSkimEvent = false;
+  world.throughEvent = false;
+  world.scoreTickEvent = false;
   world.beatClick = false;
 
   if (world.variant === "lanes") {
@@ -348,6 +368,7 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
     }
   }
   if (world.perfectFlash > 0) world.perfectFlash = Math.max(0, world.perfectFlash - dt);
+  if (world.throughTimer > 0) world.throughTimer = Math.max(0, world.throughTimer - dt);
   if (world.variant === "beat") {
     const prevPulse = world.beatPulse;
     world.beatPulse = beatPulseAmp(world.time);
@@ -396,13 +417,20 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
         (world.x < gap.left + THREAD_RADIUS || world.x > gap.right - THREAD_RADIUS);
       if (!obs.nicked && world.alive && !lanesDenied) {
         world.cleanPasses += 1;
-        world.combo += 1;
-        if (world.combo > world.comboPeak) world.comboPeak = world.combo;
-        // Tension formula: this pass's clean award = CLEAN_AWARD × (1 + 0.5 × stacks), then stacks clear.
-        world.cleanAward += cleanPassAward(world.tension);
-        world.tension = 0;
-        world.tensionTimer = 0;
-        cue(world, "clean");
+        if (obs.skimmed) {
+          // Skim-gated lip: the only style payout. Combo / Tension cash live here.
+          world.combo += 1;
+          if (world.combo > world.comboPeak) world.comboPeak = world.combo;
+          world.skimCash += skimAward(world.tension);
+          world.tension = 0;
+          world.tensionTimer = 0;
+          world.scoreTickEvent = true;
+          cue(world, "clean");
+        } else {
+          // Center-clean: gray "through" only. Not combo food. Score 0.
+          world.throughTimer = THROUGH_FLASH_MS / 1000;
+          world.throughEvent = true;
+        }
         if (world.variant === "beat") {
           if (isPerfectTiming(world.time, Boolean(intent.touchScoring || intent.pointerActive))) {
             world.perfects += 1;
@@ -413,7 +441,6 @@ export function updateWorld(world: World, intent: Intent, dt: number): void {
             world.beatStreak = 0;
           }
         }
-        if (obs.kind === "gate") applyCleanPassJuice(world, obs);
       }
     }
   }
@@ -449,6 +476,7 @@ function applyHit(world: World, hit: Hit, obs: ObstacleRuntime | null): void {
     return;
   }
   if (hit === "nearMiss") {
+    if (obs) obs.skimmed = true;
     pulseNearMiss(world);
     return;
   }
@@ -475,6 +503,8 @@ function pulseNearMiss(world: World): void {
   world.tensionGainLock = TENSION_GAIN_LOCK_MS / 1000;
   world.nearMissTimer = NEAR_MISS_MS / 1000;
   world.edgeSkimPulse = true;
+  world.skimEvents += 1;
+  world.scoreTickEvent = true;
   const brakingSkim = world.variant === "brake" && world.braking;
   if (brakingSkim) {
     world.brakeSkimEvent = true;
@@ -517,32 +547,6 @@ function spawnNearMissParticles(world: World): void {
       life: 0.22,
       maxLife: 0.22,
       ink: i >= BEAT_SKIM_PARTICLE_BASE,
-    });
-  }
-}
-
-function applyCleanPassJuice(world: World, obs: ObstacleRuntime): void {
-  if (world.reducedMotion) return;
-  // Slice A: a skim already playing is the craft — don't replace it with center-gap sparks.
-  if (world.edgeSkimPulse || world.brakeSkimPulse) return;
-  world.nearMissTimer = CLEAN_PASS_FLASH_MS / 1000;
-  spawnGatePassParticles(world, obs);
-}
-
-function spawnGatePassParticles(world: World, obs: ObstacleRuntime): void {
-  const cx = (obs.left + obs.right) / 2;
-  const extra = world.variant === "beat" ? Math.round(4 * world.beatHeat) : 0;
-  const count = 5 + extra;
-  for (let i = 0; i < count; i++) {
-    const ang = (Math.PI * 2 * i) / count + 0.4;
-    const sp = 14 + (i % 2) * 8;
-    world.particles.push({
-      x: cx,
-      y: 0,
-      vx: Math.cos(ang) * sp,
-      vy: Math.sin(ang) * sp,
-      life: 0.28,
-      maxLife: 0.28,
     });
   }
 }

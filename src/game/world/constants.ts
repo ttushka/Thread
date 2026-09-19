@@ -17,12 +17,15 @@ export const NICK_MS = 300;
 export const DEATH_FREEZE_MS = 200;
 export const DEATH_FLASH_MS = 100;
 export const DEATH_DISSOLVE_MS = 260;
-export const NEAR_MISS_MS = 140;
+/** Held long enough that a skim score tick is unmissable. */
+export const NEAR_MISS_MS = 180;
 export const TENSION_CAP = 3;
 export const TENSION_HOLD_MS = 1200;
 export const TENSION_GAIN_LOCK_MS = 200;
-/** Clean Pass thread accent. Same family as near-miss; brief 80–120ms. */
-export const CLEAN_PASS_FLASH_MS = 120;
+/** Gray HUD "through" flash. Not combo food — no thread score juice. */
+export const THROUGH_FLASH_MS = 160;
+/** Legacy name: center-clean no longer flashes the thread like a score tick. */
+export const CLEAN_PASS_FLASH_MS = THROUGH_FLASH_MS;
 /** Fairness #19 / feel-sanity: no lip closer than this in time. */
 export const LIP_TELEGRAPH_MIN_S = 0.6;
 /** Static scoring-gate lips. Same slab family as movers, thinner, not animated. */

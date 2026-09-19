@@ -86,7 +86,7 @@ describe("Slice C — movers as mid-spice", () => {
 
   it("does not retune Brake assist or Slice A/B skim tokens", () => {
     expect(BRAKE_SLOW).toBe(0.45);
-    expect(CONTROL_SKIM_HEAT).toBe(0.35);
+    expect(CONTROL_SKIM_HEAT).toBe(0.55);
     expect(BEAT_SKIM_EARLY_MS).toBe(240);
     expect(BEAT_SKIM_FORGIVE_STREAK).toBe(3);
   });

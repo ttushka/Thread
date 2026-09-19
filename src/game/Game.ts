@@ -17,6 +17,8 @@ import {
   markBrakeSkimTeachSeen,
   beatSkimTeachSeen,
   markBeatSkimTeachSeen,
+  skimScoreTeachSeen,
+  markSkimScoreTeachSeen,
 } from "./persistence.ts";
 import { dailyRunSeed } from "./modes/daily.ts";
 import { endlessSeed } from "./modes/endless.ts";
@@ -30,6 +32,9 @@ import {
   beatSkimTeachOpacity,
   BRAKE_SKIM_TEACH,
   BEAT_SKIM_TEACH,
+  SCORE_SKIM_TEACH,
+  skimScoreTeachOpacity,
+  RESULT_NO_SKIM,
   type ExperimentVariant,
 } from "./variant.ts";
 import { createWorld, deathPhase, updateWorld, worldScore, type World } from "./world/simulate.ts";
@@ -51,6 +56,10 @@ export type GameSnapshot = {
   combo: number;
   comboPeak: number;
   cleanPasses: number;
+  skimEvents: number;
+  throughFlash: boolean;
+  scoreTick: boolean;
+  noSkimResult: string | null;
   perfects: number;
   distance: number;
   timeMs: number;
@@ -95,6 +104,9 @@ export class Game {
   /** Age in seconds while Beat skim teach is showing; `done` until the next run. */
   private beatSkimTeach: { age: number } | "done" | null = null;
   private beatSkimTeachSeen = false;
+  /** Age in seconds while first-run score teach is showing; `done` until the next run. */
+  private skimScoreTeach: { age: number } | "done" | null = null;
+  private skimScoreTeachSeen = false;
   private playDays: string[] = [];
   private playDayNoted = false;
 
@@ -105,6 +117,7 @@ export class Game {
     if (opts?.variant) this.variant = opts.variant;
     this.brakeSkimTeachSeen = brakeSkimTeachSeen(storage);
     this.beatSkimTeachSeen = beatSkimTeachSeen(storage);
+    this.skimScoreTeachSeen = skimScoreTeachSeen(storage);
     this.playDays = loadPlayDays(storage);
   }
 
@@ -177,6 +190,7 @@ export class Game {
     this.restartQueued = false;
     this.brakeSkimTeach = null;
     this.beatSkimTeach = null;
+    this.skimScoreTeach = null;
   }
 
   private beginRun(): void {
@@ -184,6 +198,7 @@ export class Game {
     this.restartQueued = false;
     this.brakeSkimTeach = null;
     this.beatSkimTeach = null;
+    this.skimScoreTeach = null;
     this.playDayNoted = false;
     this.world = createWorld(this.seed, {
       daily: this.mode === "daily",
@@ -192,6 +207,7 @@ export class Game {
     });
     this.screen = "play";
     this.notePlayDay();
+    this.beginSkimScoreTeach();
   }
 
   private notePlayDay(): void {
@@ -212,6 +228,7 @@ export class Game {
       if (this.screen === "play") {
         this.stepBrakeSkimTeach(dt);
         this.stepBeatSkimTeach(dt);
+        this.stepSkimScoreTeach(dt);
       }
       this.noteBrakeSkim();
       this.noteBeatSkim();
@@ -251,6 +268,7 @@ export class Game {
     this.brakeSkimTeachSeen = true;
     markBrakeSkimTeachSeen(this.storage);
     this.brakeSkimTeach = { age: 0 };
+    this.skimScoreTeach = "done";
   }
 
   private stepBrakeSkimTeach(dt: number): void {
@@ -267,12 +285,26 @@ export class Game {
     this.beatSkimTeachSeen = true;
     markBeatSkimTeachSeen(this.storage);
     this.beatSkimTeach = { age: 0 };
+    this.skimScoreTeach = "done";
   }
 
   private stepBeatSkimTeach(dt: number): void {
     if (!this.beatSkimTeach || this.beatSkimTeach === "done") return;
     this.beatSkimTeach.age += dt;
     if (beatSkimTeachOpacity(this.beatSkimTeach.age) <= 0) this.beatSkimTeach = "done";
+  }
+
+  private beginSkimScoreTeach(): void {
+    if (this.skimScoreTeachSeen) return;
+    this.skimScoreTeachSeen = true;
+    markSkimScoreTeachSeen(this.storage);
+    this.skimScoreTeach = { age: 0 };
+  }
+
+  private stepSkimScoreTeach(dt: number): void {
+    if (!this.skimScoreTeach || this.skimScoreTeach === "done") return;
+    this.skimScoreTeach.age += dt;
+    if (skimScoreTeachOpacity(this.skimScoreTeach.age) <= 0) this.skimScoreTeach = "done";
   }
 
   private finishRun(kind: "dead" | "cleared"): void {
@@ -309,20 +341,24 @@ export class Game {
 
     const skimTeach = this.brakeSkimTeach;
     const beatTeach = this.beatSkimTeach;
+    const scoreTeach = this.skimScoreTeach;
     let teach = VARIANT_TEACH[this.variant];
     let teachOpacity = this.screen === "play" && world ? inRunTeachOpacity(world.time) : 0;
+    if (this.screen === "play" && scoreTeach && scoreTeach !== "done") {
+      teach = SCORE_SKIM_TEACH;
+      teachOpacity = skimScoreTeachOpacity(scoreTeach.age);
+    }
     if (this.screen === "play" && skimTeach && skimTeach !== "done") {
       teach = BRAKE_SKIM_TEACH;
       teachOpacity = brakeSkimTeachOpacity(skimTeach.age);
-    } else if (skimTeach === "done") {
-      teachOpacity = 0;
     }
     if (this.screen === "play" && beatTeach && beatTeach !== "done") {
       teach = BEAT_SKIM_TEACH;
       teachOpacity = beatSkimTeachOpacity(beatTeach.age);
-    } else if (beatTeach === "done") {
-      teachOpacity = 0;
     }
+    const oneShotDone =
+      scoreTeach === "done" || skimTeach === "done" || beatTeach === "done";
+    if (oneShotDone && teach === VARIANT_TEACH[this.variant]) teachOpacity = 0;
 
     const todayLocal = localDateKey();
     const recurrentCandidate = isRecurrentCandidate(this.playDays, todayLocal);
@@ -336,6 +372,13 @@ export class Game {
       combo: world?.combo ?? 0,
       comboPeak: world?.comboPeak ?? 0,
       cleanPasses: world?.cleanPasses ?? 0,
+      skimEvents: world?.skimEvents ?? 0,
+      throughFlash: Boolean(world && world.throughTimer > 0),
+      scoreTick: Boolean(world?.scoreTickEvent),
+      noSkimResult:
+        (this.screen === "dead" || this.screen === "cleared") && (world?.skimEvents ?? 0) === 0
+          ? RESULT_NO_SKIM
+          : null,
       perfects: world?.perfects ?? 0,
       distance: world?.distance ?? 0,
       timeMs,

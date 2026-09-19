@@ -32,15 +32,16 @@ describe("Game persistence", () => {
     expect(game.world).not.toBeNull();
     game.world!.distance = 400;
     game.world!.cleanPasses = 2;
-    game.world!.cleanAward = 100;
+    game.world!.skimCash = 100;
     game.world!.comboPeak = 2;
+    game.world!.skimEvents = 3;
     game.world!.alive = false;
     game.tick(idle, TICK);
     const raw = storage.getItem(SAVE_KEY);
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!) as { v: number; endlessBest: number; daily: unknown };
     expect(parsed.v).toBe(1);
-    expect(parsed.endlessBest).toBe(400 + 100 + 50);
+    expect(parsed.endlessBest).toBe(Math.floor(400 * 1.5) + 100);
     expect(parsed).not.toHaveProperty("thread_pb_endless");
   });
 

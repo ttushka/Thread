@@ -35,9 +35,15 @@ export const BEAT_SKIM_PARTICLE_BASE = 4;
 export const BEAT_SKIM_PARTICLE_EXTRA = 4;
 
 /** BRAKE-SKIM-NARRATIVE-v1 — feedback + copy only; never retunes hitbox / speed / score. */
-export const BRAKE_SKIM_HEAT = 0.5;
-/** CORE-LOOP-SKIM-NATIVE-v1 Slice A — Control near-miss juice; below Brake-held. */
-export const CONTROL_SKIM_HEAT = 0.35;
+export const BRAKE_SKIM_HEAT = 0.72;
+/** Control near-miss juice. Amped so a skim score tick is unmissable; still below Brake-held. */
+export const CONTROL_SKIM_HEAT = 0.55;
+
+/** BIG-FEEL-REDESIGN-v1 PR1 — first-run HUD line. Once per browser. */
+export const SCORE_SKIM_TEACH = "Score lives on the skim.";
+export const SCORE_SKIM_TEACH_S = 4;
+export const SCORE_SKIM_TEACH_FADE_S = 0.5;
+export const RESULT_NO_SKIM = "No skims — try the edge.";
 export const BRAKE_SKIM_TEACH = "Skim while slow — that's the craft.";
 export const BRAKE_SKIM_TEACH_S = 3.5;
 export const BRAKE_SKIM_TEACH_FADE_S = 0.5;
@@ -91,6 +97,15 @@ export function beatSkimTeachOpacity(ageS: number): number {
   const hold = BEAT_SKIM_TEACH_S - BEAT_SKIM_TEACH_FADE_S;
   if (ageS <= hold) return 1;
   const t = (ageS - hold) / BEAT_SKIM_TEACH_FADE_S;
+  if (t >= 1) return 0;
+  return 1 - t;
+}
+
+/** First-run score teach: hold, then fade. Total 4s. */
+export function skimScoreTeachOpacity(ageS: number): number {
+  const hold = SCORE_SKIM_TEACH_S - SCORE_SKIM_TEACH_FADE_S;
+  if (ageS <= hold) return 1;
+  const t = (ageS - hold) / SCORE_SKIM_TEACH_FADE_S;
   if (t >= 1) return 0;
   return 1 - t;
 }

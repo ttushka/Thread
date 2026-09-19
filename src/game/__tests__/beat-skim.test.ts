@@ -10,6 +10,8 @@ import {
 import { CLEAN_AWARD, cleanPassAward } from "../score.ts";
 import {
   BEAT_SKIM_MS,
+  BEAT_SKIM_EARLY_MS,
+  BEAT_SKIM_FORGIVE_STREAK,
   BEAT_SKIM_TEACH,
   BEAT_SKIM_TEACH_S,
   BEAT_PULSE_SCALE_MAX,
@@ -28,7 +30,7 @@ import {
   TENSION_GAIN_LOCK_MS,
   TICK,
 } from "../world/constants.ts";
-import { beatDistance, beatPeriod, isSkimTiming, msToNearestBeat } from "../world/beat.ts";
+import { beatDistance, beatPeriod, isSkimTiming, msToNearestBeat, skimWindowMs } from "../world/beat.ts";
 import { createWorld, updateWorld } from "../world/simulate.ts";
 
 const hold = (x: number): Intent => ({
@@ -102,10 +104,11 @@ function crossAt(world: ReturnType<typeof createWorld>, y: number, extra: Partia
 }
 
 describe("BEAT-SKIM-MASTERY-v1", () => {
-  it("uses the Perfect clock for a ±180ms skim window", () => {
-    expect(isSkimTiming(0)).toBe(true);
-    expect(isSkimTiming(BEAT_SKIM_MS / 1000)).toBe(true);
-    expect(isSkimTiming(BEAT_SKIM_MS / 1000 + 0.001)).toBe(false);
+  it("uses the Perfect clock for a ±180ms skim window at streak ≥ 3", () => {
+    expect(skimWindowMs(BEAT_SKIM_FORGIVE_STREAK)).toBe(BEAT_SKIM_MS);
+    expect(isSkimTiming(0, BEAT_SKIM_FORGIVE_STREAK)).toBe(true);
+    expect(isSkimTiming(BEAT_SKIM_MS / 1000, BEAT_SKIM_FORGIVE_STREAK)).toBe(true);
+    expect(isSkimTiming(BEAT_SKIM_MS / 1000 + 0.001, BEAT_SKIM_FORGIVE_STREAK)).toBe(false);
     expect(msToNearestBeat(BEAT_SKIM_MS / 1000)).toBeCloseTo(BEAT_SKIM_MS, 6);
   });
 
@@ -178,14 +181,14 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     expect(world.beatSkimEvent).toBe(false);
   });
 
-  it("does not credit a near-miss outside ±180ms", () => {
-    const world = skimWall("beat", BEAT_SKIM_MS / 1000 + 0.02);
+  it("does not credit a near-miss outside the early ±240ms window", () => {
+    const world = skimWall("beat", BEAT_SKIM_EARLY_MS / 1000 + 0.02);
     expect(world.tension).toBe(1);
     expect(world.nearMissTimer).toBeGreaterThan(0);
     expect(world.beatSkimEvent).toBe(false);
     expect(world.beatStreak).toBe(0);
     expect(world.beatHeat).toBe(0);
-    expect(msToNearestBeat(world.time)).toBeGreaterThan(BEAT_SKIM_MS);
+    expect(msToNearestBeat(world.time)).toBeGreaterThan(BEAT_SKIM_EARLY_MS);
   });
 
   it("leaves Control and Brake streak/heat untouched", () => {
@@ -203,7 +206,7 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     const cold = worldWith("beat", 118, []);
     cold.reducedMotion = false;
     cold.course.keyframes = wideCorridor(100, 260);
-    cold.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    cold.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
     updateWorld(cold, hold(118), TICK);
     expect(cold.beatStreak).toBe(0);
     expect(cold.particles).toHaveLength(beatSkimParticleCount(0));
@@ -214,9 +217,9 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     hot.course.keyframes = wideCorridor(100, 260);
     hot.beatStreak = 8;
     hot.beatHeat = 1;
-    hot.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    hot.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
     updateWorld(hot, hold(118), TICK);
-    expect(hot.beatStreak).toBe(8);
+    expect(hot.beatStreak).toBe(7);
     expect(hot.particles).toHaveLength(beatSkimParticleCount(1));
     expect(hot.particles.filter((p) => p.ink).length).toBe(4);
     expect(hot.particles.filter((p) => !p.ink).length).toBe(4);
@@ -231,11 +234,77 @@ describe("BEAT-SKIM-MASTERY-v1", () => {
     const control = worldWith("control", 118, []);
     control.reducedMotion = false;
     control.course.keyframes = wideCorridor(100, 260);
-    control.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    control.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
     updateWorld(control, hold(118), TICK);
     expect(control.particles).toHaveLength(beatSkimParticleCount(CONTROL_SKIM_HEAT));
     expect(control.beatStreak).toBe(0);
     expect(control.distance).toBeCloseTo(cold.distance, 8);
+  });
+});
+
+describe("BEAT-FORGIVE-RUNG-v1", () => {
+  it("widens the on-pulse skim window to ±240ms while streak < 3", () => {
+    expect(skimWindowMs(0)).toBe(BEAT_SKIM_EARLY_MS);
+    expect(skimWindowMs(2)).toBe(BEAT_SKIM_EARLY_MS);
+    expect(isSkimTiming(BEAT_SKIM_EARLY_MS / 1000, 0)).toBe(true);
+    expect(isSkimTiming(BEAT_SKIM_EARLY_MS / 1000 + 0.001, 0)).toBe(false);
+
+    const early = skimWall("beat", BEAT_SKIM_MS / 1000 + 0.02);
+    expect(msToNearestBeat(early.time)).toBeGreaterThan(BEAT_SKIM_MS);
+    expect(msToNearestBeat(early.time)).toBeLessThanOrEqual(BEAT_SKIM_EARLY_MS);
+    expect(early.beatSkimEvent).toBe(true);
+    expect(early.beatStreak).toBe(1);
+  });
+
+  it("restores the ±180ms mastery window at streak ≥ 3", () => {
+    expect(skimWindowMs(3)).toBe(BEAT_SKIM_MS);
+    expect(skimWindowMs(8)).toBe(BEAT_SKIM_MS);
+    expect(isSkimTiming(BEAT_SKIM_MS / 1000, 3)).toBe(true);
+    expect(isSkimTiming(BEAT_SKIM_MS / 1000 + 0.001, 3)).toBe(false);
+
+    const world = worldWith("beat", 118, []);
+    world.course.keyframes = wideCorridor(100, 260);
+    world.beatStreak = 3;
+    world.beatHeat = beatIntensityFromStreak(3);
+    world.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    updateWorld(world, hold(118), TICK);
+    expect(msToNearestBeat(world.time)).toBeGreaterThan(BEAT_SKIM_MS);
+    expect(msToNearestBeat(world.time)).toBeLessThanOrEqual(BEAT_SKIM_EARLY_MS);
+    expect(world.beatSkimEvent).toBe(false);
+    expect(world.beatStreak).toBe(2);
+  });
+
+  it("drops streak by exactly −1 on an off-pulse near-miss, without wiping heat", () => {
+    const world = worldWith("beat", 118, []);
+    world.course.keyframes = wideCorridor(100, 260);
+    world.beatStreak = 5;
+    world.beatHeat = beatIntensityFromStreak(5);
+    const heatBefore = world.beatHeat;
+    world.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
+    updateWorld(world, hold(118), TICK);
+    expect(world.tension).toBe(1);
+    expect(world.beatSkimEvent).toBe(false);
+    expect(world.beatStreak).toBe(4);
+    expect(world.beatHeat).toBeGreaterThan(beatIntensityFromStreak(4));
+    expect(world.beatHeat).toBeGreaterThan(heatBefore * 0.5);
+    expect(world.beatHeat).toBeLessThanOrEqual(heatBefore);
+    expect(msToNearestBeat(world.time)).toBeGreaterThan(BEAT_SKIM_EARLY_MS);
+  });
+
+  it("floors an off-pulse miss at streak 0 and leaves Control/Brake at 0", () => {
+    const beat = skimWall("beat", BEAT_SKIM_EARLY_MS / 1000 + 0.02);
+    expect(beat.beatStreak).toBe(0);
+    expect(beat.beatHeat).toBe(0);
+    for (const variant of ["control", "brake"] as const) {
+      const world = worldWith(variant, 118, []);
+      world.course.keyframes = wideCorridor(100, 260);
+      world.beatStreak = 4;
+      world.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
+      updateWorld(world, hold(118), TICK);
+      expect(world.beatStreak).toBe(0);
+      expect(world.beatHeat).toBe(0);
+      expect(world.beatSkimEvent).toBe(false);
+    }
   });
 });
 
@@ -371,7 +440,7 @@ describe("BEAT-TEACH-SKIM-ON-PULSE-v1 teach", () => {
     world.prevDistance = world.distance;
     world.x = 118;
     world.prevX = 118;
-    world.time = BEAT_SKIM_MS / 1000 + 0.02 - TICK;
+    world.time = BEAT_SKIM_EARLY_MS / 1000 + 0.02 - TICK;
     miss.tick(hold(118), TICK);
     expect(miss.snapshot().teach).toBe(VARIANT_TEACH.beat);
     expect(miss.snapshot().teach).not.toBe(BEAT_SKIM_TEACH);

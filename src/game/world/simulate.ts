@@ -483,8 +483,13 @@ function pulseNearMiss(world: World): void {
   cue(world, "tension");
   if (!world.reducedMotion) spawnNearMissParticles(world);
   // BEAT-SKIM-MASTERY-v1: juice uses current heat; credit after so this skim does not double.
-  if (world.variant === "beat" && isSkimTiming(world.time) && creditBeatStreak(world)) {
-    world.beatSkimEvent = true;
+  // BEAT-FORGIVE-RUNG-v1: off-pulse near-miss is exactly −1 streak, not wipe.
+  if (world.variant === "beat") {
+    if (isSkimTiming(world.time, world.beatStreak)) {
+      if (creditBeatStreak(world)) world.beatSkimEvent = true;
+    } else {
+      world.beatStreak = Math.max(0, world.beatStreak - 1);
+    }
   }
 }
 

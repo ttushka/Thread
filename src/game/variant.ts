@@ -28,6 +28,9 @@ export const BEAT_BED_BOOST_DB = 6;
 export const BEAT_SHELF_DB = 3;
 /** BEAT-SKIM-MASTERY-v1 — on-pulse near-miss uses the Perfect clock, wider window. */
 export const BEAT_SKIM_MS = 180;
+/** BEAT-FORGIVE-RUNG-v1 — early skim window while streak < 3; mastery restores ±180. */
+export const BEAT_SKIM_EARLY_MS = 240;
+export const BEAT_SKIM_FORGIVE_STREAK = 3;
 export const BEAT_SKIM_PARTICLE_BASE = 4;
 export const BEAT_SKIM_PARTICLE_EXTRA = 4;
 

@@ -100,7 +100,9 @@ body {
 }
 
 .hud-score.tick {
+  /* ART-SKIM-TICK-JUICE-BUMP-v1 — ink→thread + +1px punch, held 120ms */
   color: var(--thread);
+  font-size: 33px;
 }
 
 .hud-through {
@@ -404,13 +406,13 @@ h2 {
 
 @media (prefers-reduced-motion: no-preference) {
   .hud-score.tick {
-    animation: hud-score-tick 180ms ease-out;
+    animation: hud-score-tick 120ms ease-out;
   }
 }
 
 @keyframes hud-score-tick {
   0% {
-    transform: scale(1.18);
+    transform: scale(1.08);
   }
   100% {
     transform: scale(1);

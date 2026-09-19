@@ -194,6 +194,7 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — score gating", () => {
     expect(world.obstacles[0]!.skimmed).toBe(true);
     expect(world.skimCash).toBe(skimAward(1));
     expect(world.scoreTickEvent).toBe(true);
+    expect(world.scoreTickTimer).toBeGreaterThan(0);
     expect(world.edgeSkimPulse).toBe(true);
     expect(world.nearMissTimer).toBeCloseTo(NEAR_MISS_MS / 1000, 5);
     expect(skimJuice(world)).toBeGreaterThan(0);
@@ -208,6 +209,7 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — score gating", () => {
     expect(world.combo).toBe(0);
     expect(world.tension).toBe(1);
     expect(world.scoreTickEvent).toBe(false);
+    expect(world.scoreTickTimer).toBe(0);
     expect(worldScore(world)).toBe(0);
   });
 });

@@ -1,4 +1,11 @@
-import { BEAT_BPM, BEAT_PERFECT_MS_KEY, BEAT_PERFECT_MS_TOUCH, BEAT_SKIM_MS } from "../variant.ts";
+import {
+  BEAT_BPM,
+  BEAT_PERFECT_MS_KEY,
+  BEAT_PERFECT_MS_TOUCH,
+  BEAT_SKIM_EARLY_MS,
+  BEAT_SKIM_FORGIVE_STREAK,
+  BEAT_SKIM_MS,
+} from "../variant.ts";
 import { BASE_SPEED } from "./constants.ts";
 
 export function beatPeriod(bpm = BEAT_BPM): number {
@@ -45,9 +52,14 @@ export function nearestBeatIndex(time: number, bpm = BEAT_BPM): number {
   return Math.round(time / period);
 }
 
-/** Wall-skim streak window. Same clock as Perfect; ±180ms, input-agnostic. */
-export function isSkimTiming(time: number, bpm = BEAT_BPM): boolean {
-  return msToNearestBeat(time, bpm) <= BEAT_SKIM_MS + 1e-6;
+/** ±240ms while streak < 3; ±180ms at mastery. Same Perfect clock. */
+export function skimWindowMs(streak = 0): number {
+  return streak < BEAT_SKIM_FORGIVE_STREAK ? BEAT_SKIM_EARLY_MS : BEAT_SKIM_MS;
+}
+
+/** Wall-skim streak window. Same clock as Perfect; input-agnostic. */
+export function isSkimTiming(time: number, streak = 0, bpm = BEAT_BPM): boolean {
+  return msToNearestBeat(time, bpm) <= skimWindowMs(streak) + 1e-6;
 }
 
 /** 1 at beat center, decaying over ~120ms — visual pulse works muted. */

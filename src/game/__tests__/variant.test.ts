@@ -12,6 +12,8 @@ import {
   BEAT_GLOW_BLUR_MAX,
   BEAT_BED_BOOST_DB,
   BEAT_SKIM_MS,
+  BEAT_SKIM_EARLY_MS,
+  BEAT_SKIM_FORGIVE_STREAK,
   beatIntensityFromStreak,
   beatBedGain,
   beatSkimParticleCount,
@@ -109,6 +111,8 @@ describe("BEAT-STREAK-INTENSITY-v1 tokens", () => {
 describe("BEAT-SKIM-MASTERY-v1 tokens", () => {
   it("locks the on-pulse skim window and teal/ink spark counts", () => {
     expect(BEAT_SKIM_MS).toBe(180);
+    expect(BEAT_SKIM_EARLY_MS).toBe(240);
+    expect(BEAT_SKIM_FORGIVE_STREAK).toBe(3);
     expect(beatSkimParticleCount(0)).toBe(4);
     expect(beatSkimParticleCount(0.5)).toBe(6);
     expect(beatSkimParticleCount(1)).toBe(8);

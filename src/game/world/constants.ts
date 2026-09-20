@@ -186,6 +186,47 @@ export const MOVER_MOTION = {
   periodMax: 3.4,
 } as const;
 
+/**
+ * BEAT-MOVER-FAIRNESS-v1 — Beat-only. Control / Brake keep MOVER_MOTION.
+ * Wider gap, slower sway, longer CX-open at contact so skim-on-pulse is a
+ * band, not a pixel slit. Retry *lowers* amplitude / offset to meet the
+ * open-window floor; never snap-shut.
+ */
+export const BEAT_MOVER_MOTION = {
+  gapMin: 124,
+  gapMax: 148,
+  amplitudeMin: 28,
+  amplitudeMax: 42,
+  amplitudeRetryCap: 48,
+  periodMin: 3.6,
+  periodMax: 4.4,
+} as const;
+
+/**
+ * BEAT-MOVER-FAIRNESS-v1 — lips immediately before Beat mover clusters.
+ * CX-live + milder offset so the player isn’t already at max weave when
+ * the pass window arrives. `pad` skips a last-second lip (no hairpin
+ * wall curve into the mover).
+ */
+export const BEAT_MOVER_APPROACH = {
+  /**
+   * Skip a scoring lip this close to the next mover (world units).
+   * ~1.3s / two beats — kills the 8px hairpin, still leaves room for a
+   * soft weave lip between 240-spaced movers.
+   */
+  pad: 120,
+  gapMin: 134,
+  gapMax: 158,
+  minOffset: 40,
+  offJitter: 8,
+  restGapMin: 210,
+  restGapMax: 246,
+  restWander: 8,
+} as const;
+
+/** Fair Beat mover CX-open duration at contact — telegraph floor, ~1 beat. */
+export const BEAT_MOVER_MIN_OPEN_S = LIP_TELEGRAPH_MIN_S;
+
 export const VIEW_AHEAD = THREAD_SCREEN_Y;
 export const VIEW_BEHIND = FIELD_H - THREAD_SCREEN_Y;
 

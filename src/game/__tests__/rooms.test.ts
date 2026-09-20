@@ -8,6 +8,7 @@ import {
   DIST,
   LIP_TELEGRAPH_MIN_S,
   MOVER_MOTION,
+  BEAT_MOVER_MOTION,
   ROOM_A,
   ROOM_B,
   ROOM_C,
@@ -126,12 +127,13 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
         const early = course.obstacles.filter((o) => o.kind === "mover" && o.y < DIST.roomBEnd);
         expect(early, label).toEqual([]);
         const movers = gauntletMovers(course);
+        const motion = variant === "beat" ? BEAT_MOVER_MOTION : MOVER_MOTION;
         expect(movers.length, label).toBe(ROOM_C.count);
         expect((movers[1]!.y - movers[0]!.y) / BASE_SPEED, label).toBeGreaterThanOrEqual(LIP_TELEGRAPH_MIN_S);
         for (const m of movers) {
           expect(isMoverSnapPhase(m), label).toBe(false);
-          expect(m.period, label).toBeGreaterThanOrEqual(MOVER_MOTION.periodMin);
-          expect(m.period, label).toBeLessThanOrEqual(MOVER_MOTION.periodMax);
+          expect(m.period, label).toBeGreaterThanOrEqual(motion.periodMin);
+          expect(m.period, label).toBeLessThanOrEqual(motion.periodMax);
         }
       }
     }

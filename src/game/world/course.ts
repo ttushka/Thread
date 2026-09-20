@@ -3,6 +3,9 @@ import { Rng } from "../rng.ts";
 import type { ExperimentVariant } from "../variant.ts";
 import {
   BASE_SPEED,
+  BEAT_MOVER_APPROACH,
+  BEAT_MOVER_MIN_OPEN_S,
+  BEAT_MOVER_MOTION,
   CX,
   DIST,
   FIELD_W,
@@ -211,8 +214,13 @@ export type MoverPhaseSearch = {
   openWindow: number;
 };
 
-function rankMoverPhase(a: MoverPhaseSearch, b: MoverPhaseSearch): boolean {
+function rankMoverPhase(a: MoverPhaseSearch, b: MoverPhaseSearch, goal: "punish" | "open"): boolean {
   if (a.snap !== b.snap) return !a.snap;
+  if (goal === "open") {
+    if (a.openWindow !== b.openWindow) return a.openWindow > b.openWindow;
+    if (a.kills !== b.kills) return !a.kills;
+    return a.unsafe < b.unsafe;
+  }
   if (a.telegraphedPunish !== b.telegraphedPunish) return a.telegraphedPunish;
   if (a.telegraphedPunish) return a.unsafe > b.unsafe;
   return a.openWindow > b.openWindow;
@@ -231,25 +239,33 @@ function evaluateMoverPhase(spec: ObstacleSpec): MoverPhaseSearch {
 }
 
 /**
- * Phase search: reject snap-shut, prefer a telegraphed center close, else the
- * longest CX-open window through contact. Geometry (speed/gap) is unchanged.
+ * Phase search: reject snap-shut.
+ * Control: prefer a telegraphed center close, else the longest CX-open window.
+ * Beat (`goal: "open"`): prefer the longest CX-open window through contact so
+ * skim-on-pulse has a real band (BEAT-MOVER-FAIRNESS-v1). Geometry is the
+ * caller's; this only picks phase.
  */
-export function searchMoverPhase(base: ObstacleSpec): MoverPhaseSearch {
+export function searchMoverPhase(
+  base: ObstacleSpec,
+  goal: "punish" | "open" = "punish",
+): MoverPhaseSearch {
   let best: MoverPhaseSearch | null = null;
   for (let i = 0; i < PHASE_STEPS; i++) {
     const phase = (i / PHASE_STEPS) * Math.PI * 2;
     const cand = evaluateMoverPhase({ ...base, phase });
-    if (!best || rankMoverPhase(cand, best)) best = cand;
+    if (!best || rankMoverPhase(cand, best, goal)) best = cand;
   }
   return best!;
 }
 
-function placeMover(rng: Rng, y: number, side: number, nextId: () => number): ObstacleSpec {
+function placeMover(rng: Rng, y: number, side: number, nextId: () => number, beat = false): ObstacleSpec {
+  const motion = beat ? BEAT_MOVER_MOTION : MOVER_MOTION;
   const id = nextId();
-  let gapWidth = rng.float(MOVER_MOTION.gapMin, MOVER_MOTION.gapMax);
-  let amplitude = rng.float(MOVER_MOTION.amplitudeMin, MOVER_MOTION.amplitudeMax);
-  const period = rng.float(MOVER_MOTION.periodMin, MOVER_MOTION.periodMax);
-  let offset = rng.float(40, 70);
+  let gapWidth = rng.float(motion.gapMin, motion.gapMax);
+  let amplitude = rng.float(motion.amplitudeMin, motion.amplitudeMax);
+  const period = rng.float(motion.periodMin, motion.periodMax);
+  let offset = beat ? rng.float(32, 56) : rng.float(40, 70);
+  const goal = beat ? "open" : "punish";
 
   const fit = (): ObstacleSpec => {
     const half = gapWidth / 2;
@@ -278,15 +294,25 @@ function placeMover(rng: Rng, y: number, side: number, nextId: () => number): Ob
   let spec = fit();
   for (let attempt = 0; attempt < 8; attempt++) {
     if (attempt > 0) {
-      amplitude = Math.min(MOVER_MOTION.amplitudeRetryCap, amplitude + 8);
-      offset = Math.min(90, offset + 10);
+      if (beat) {
+        gapWidth = Math.min(motion.gapMax, gapWidth + 8);
+        amplitude = Math.max(motion.amplitudeMin, amplitude - 6);
+        offset = Math.max(32, offset - 8);
+      } else {
+        amplitude = Math.min(motion.amplitudeRetryCap, amplitude + 8);
+        offset = Math.min(90, offset + 10);
+      }
       spec = fit();
     }
-    const found = searchMoverPhase(spec);
+    const found = searchMoverPhase(spec, goal);
     spec.phase = found.phase;
-    if (found.telegraphedPunish) return spec;
+    if (beat) {
+      if (!found.snap && found.openWindow >= BEAT_MOVER_MIN_OPEN_S) return spec;
+    } else if (found.telegraphedPunish) {
+      return spec;
+    }
   }
-  const found = searchMoverPhase(spec);
+  const found = searchMoverPhase(spec, goal);
   spec.phase = found.phase;
   return spec;
 }
@@ -325,9 +351,13 @@ function insertMover(
   obstacles: ObstacleSpec[],
   keyframes: WallKeyframe[],
   center: number,
+  beat = false,
 ): number {
-  obstacles.push(placeMover(rng, y, side, nextId));
-  const around = placeRest(rng, y, 188, 220, 16, center);
+  obstacles.push(placeMover(rng, y, side, nextId, beat));
+  const restMin = beat ? BEAT_MOVER_APPROACH.restGapMin : 188;
+  const restMax = beat ? BEAT_MOVER_APPROACH.restGapMax : 220;
+  const wander = beat ? BEAT_MOVER_APPROACH.restWander : 16;
+  const around = placeRest(rng, y, restMin, restMax, wander, center);
   keyframes.push(around.kf);
   return around.center;
 }
@@ -346,7 +376,8 @@ export type CourseOptions = {
 /**
  * Deterministic course. All randomness from `seed` via mulberry32.
  * Daily finish is a soft landing after the authored first minute.
- * Control / Brake share this path; Beat only snaps scoring-lip Y to the grid.
+ * Control / Brake share this path; Beat snaps scoring-lip Y to the grid and
+ * uses BEAT-MOVER-FAIRNESS knobs in Room C (Control motion/approach untouched).
  */
 export function generateCourse(seed: number, opts: CourseOptions): CourseSpec {
   if (opts.variant === "beat") return generateAnalogCourse(seed, opts, true);
@@ -381,7 +412,8 @@ type LipRoom = {
 
 /**
  * Room A/B/C first minute, then Endless stays in that vocabulary.
- * Beat: scoring-lip *spacing* snaps to the metronome; movers stay off-grid.
+ * Beat: scoring-lip *spacing* snaps to the metronome; movers stay off-grid
+ * but use Beat-variant pass-band / approach knobs (BEAT-MOVER-FAIRNESS-v1).
  */
 function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean): CourseSpec {
   const rng = new Rng(seed);
@@ -479,27 +511,58 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
   };
 
   const fillMoverGauntlet = (until: number, count: number) => {
+    const pad = beat ? BEAT_MOVER_APPROACH.pad : 0;
     const moverYs = planGauntletYs(rng, y, until, count);
     let moverIdx = 0;
     while (y < until) {
       const step = lipStep(rng, ROOM_C.stepMin, ROOM_C.stepMax);
       const nextY = plannedGateY(step);
       const nextMoverY = moverYs[moverIdx];
-      if (nextMoverY !== undefined && nextY >= nextMoverY) {
+      if (nextMoverY !== undefined && nextY >= nextMoverY - pad) {
+        // Beat: skip a last-second lip so walls don't hairpin into the window.
+        // Rest partway so the previous weave interpolates over distance, not 8px.
+        if (beat && pad > 0 && nextMoverY - y > 24) {
+          pushRest(
+            BEAT_MOVER_APPROACH.restGapMin,
+            BEAT_MOVER_APPROACH.restGapMax,
+            BEAT_MOVER_APPROACH.restWander,
+            (nextMoverY - y) * 0.5,
+          );
+        }
         y = nextMoverY;
-        center = insertMover(rng, y, side, nextId, obstacles, keyframes, center);
+        center = insertMover(rng, y, side, nextId, obstacles, keyframes, center, beat);
         moverIdx += 1;
         continue;
       }
       if (nextY >= until) break;
-      pushGate(ROOM_C.gapMin, ROOM_C.gapMax, ROOM_C.minOffset, ROOM_C.offJitter, step);
+      if (beat) {
+        pushGate(
+          BEAT_MOVER_APPROACH.gapMin,
+          BEAT_MOVER_APPROACH.gapMax,
+          BEAT_MOVER_APPROACH.minOffset,
+          BEAT_MOVER_APPROACH.offJitter,
+          step,
+          true,
+        );
+      } else {
+        pushGate(ROOM_C.gapMin, ROOM_C.gapMax, ROOM_C.minOffset, ROOM_C.offJitter, step);
+      }
     }
     while (moverIdx < moverYs.length) {
-      obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId));
+      obstacles.push(placeMover(rng, moverYs[moverIdx]!, side, nextId, beat));
       moverIdx += 1;
     }
     if (y < until) {
-      pushRest(188, 220, 16, until - y);
+      if (beat) {
+        pushRest(
+          BEAT_MOVER_APPROACH.restGapMin,
+          BEAT_MOVER_APPROACH.restGapMax,
+          BEAT_MOVER_APPROACH.restWander,
+          until - y,
+        );
+      } else {
+        pushRest(188, 220, 16, until - y);
+      }
     }
   };
 
@@ -525,7 +588,16 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
   // Room B 15–40s: tighter L/R weave corridor. No movers.
   fillLipRoom(DIST.roomBEnd, ROOM_B);
   if (y < DIST.roomBEnd) {
-    pushRest(ROOM_B.gapMin + 20, ROOM_B.gapMax + 30, 12, DIST.roomBEnd - y);
+    if (beat) {
+      pushRest(
+        BEAT_MOVER_APPROACH.restGapMin,
+        BEAT_MOVER_APPROACH.restGapMax,
+        BEAT_MOVER_APPROACH.restWander,
+        DIST.roomBEnd - y,
+      );
+    } else {
+      pushRest(ROOM_B.gapMin + 20, ROOM_B.gapMax + 30, 12, DIST.roomBEnd - y);
+    }
   }
 
   // Room C 40–60s: readable mover gauntlet (3+). Telegraph ≥0.6s.
@@ -585,6 +657,7 @@ function generateAnalogCourse(seed: number, opts: CourseOptions, beat: boolean):
     finishY,
     keyframes,
     obstacles,
+    variant: opts.variant ?? "control",
   };
 }
 
@@ -745,6 +818,7 @@ function generateLanesCourse(seed: number, opts: CourseOptions): CourseSpec {
     finishY,
     keyframes,
     obstacles,
+    variant: "lanes",
   };
 }
 

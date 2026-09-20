@@ -2,6 +2,8 @@ import type { CourseSpec, ObstacleSpec } from "../../types.ts";
 import type { Intent } from "../../types.ts";
 import {
   BASE_SPEED,
+  BEAT_MOVER_APPROACH,
+  BEAT_MOVER_MOTION,
   CX,
   DIST,
   LIP_TELEGRAPH_MIN_S,
@@ -29,12 +31,14 @@ export function scoringGates(course: CourseSpec): ObstacleSpec[] {
   return course.obstacles.filter((o) => o.kind === "gate").sort((a, b) => a.y - b.y || a.id - b.id);
 }
 
-export function minOffsetForGateY(y: number): number {
+export function minOffsetForGateY(y: number, variant?: CourseSpec["variant"]): number {
   if (y < DIST.openEnd) return 0;
   // First-minute A is CX-live (offset capped). Hard minOffset 80 is Room B+.
   if (isRoomALiveOpening(y)) return ROOM_A.teachMinOffset;
   if (y < DIST.roomBEnd) return ROOM_B.minOffset;
-  if (y < DIST.roomCEnd) return ROOM_C.minOffset;
+  if (y < DIST.roomCEnd) {
+    return variant === "beat" ? BEAT_MOVER_APPROACH.minOffset : ROOM_C.minOffset;
+  }
   return ROOM_B.minOffset;
 }
 
@@ -53,16 +57,22 @@ export function checkCourseLayout(course: CourseSpec): string[] {
     if (g.y >= DIST.openEnd && off < 40) {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < 40`);
     }
-    const phaseMin = minOffsetForGateY(g.y);
+    const phaseMin = minOffsetForGateY(g.y, course.variant);
     if (g.y >= DIST.openEnd && g.y <= DIST.rhythmEnd && off < phaseMin - 1) {
       errors.push(`scoring gate ${g.id} |center-CX|=${off.toFixed(2)} < minOffset ${phaseMin}`);
     }
     const killOff = g.gapWidth / 2 - THREAD_RADIUS;
+    const beatApproach = course.variant === "beat" && g.y >= DIST.roomBEnd;
     if (isRoomALiveOpening(g.y)) {
       if (!openingIncludesCx(g.left, g.right)) {
         errors.push(
           `Room A gate ${g.id} must include CX (off=${off.toFixed(2)}, killOff=${killOff.toFixed(2)})`,
         );
+      }
+    } else if (beatApproach) {
+      // BEAT-MOVER-FAIRNESS-v1: Room C approach lips are CX-live on purpose.
+      if (!openingIncludesCx(g.left, g.right)) {
+        errors.push(`Beat Room C approach gate ${g.id} must include CX`);
       }
     } else if (g.y >= DIST.openEnd && off <= killOff) {
       errors.push(`scoring gate ${g.id} still covers CX (off=${off.toFixed(2)}, need > ${killOff.toFixed(2)})`);
@@ -137,21 +147,17 @@ export function checkCourseLayout(course: CourseSpec): string[] {
         }
       }
       for (const m of movers) {
-        if (m.gapWidth < MOVER_MOTION.gapMin - 1e-6 || m.gapWidth > MOVER_MOTION.gapMax + 1e-6) {
-          errors.push(`mover gapWidth ${m.gapWidth.toFixed(2)} outside ${MOVER_MOTION.gapMin}–${MOVER_MOTION.gapMax}`);
+        const motion = course.variant === "beat" ? BEAT_MOVER_MOTION : MOVER_MOTION;
+        if (m.gapWidth < motion.gapMin - 1e-6 || m.gapWidth > motion.gapMax + 1e-6) {
+          errors.push(`mover gapWidth ${m.gapWidth.toFixed(2)} outside ${motion.gapMin}–${motion.gapMax}`);
         }
-        if (
-          m.amplitude < MOVER_MOTION.amplitudeMin - 1e-6 ||
-          m.amplitude > MOVER_MOTION.amplitudeRetryCap + 1e-6
-        ) {
+        if (m.amplitude < motion.amplitudeMin - 1e-6 || m.amplitude > motion.amplitudeRetryCap + 1e-6) {
           errors.push(
-            `mover amplitude ${m.amplitude.toFixed(2)} outside ${MOVER_MOTION.amplitudeMin}–${MOVER_MOTION.amplitudeRetryCap}`,
+            `mover amplitude ${m.amplitude.toFixed(2)} outside ${motion.amplitudeMin}–${motion.amplitudeRetryCap}`,
           );
         }
-        if (m.period < MOVER_MOTION.periodMin - 1e-6 || m.period > MOVER_MOTION.periodMax + 1e-6) {
-          errors.push(
-            `mover period ${m.period.toFixed(3)} outside ${MOVER_MOTION.periodMin}–${MOVER_MOTION.periodMax}`,
-          );
+        if (m.period < motion.periodMin - 1e-6 || m.period > motion.periodMax + 1e-6) {
+          errors.push(`mover period ${m.period.toFixed(3)} outside ${motion.periodMin}–${motion.periodMax}`);
         }
         if (Math.abs(m.baseCenter - CX) < 40 - 1e-3) {
           errors.push(`mover baseCenter on highway |c-CX|=${Math.abs(m.baseCenter - CX).toFixed(2)}`);

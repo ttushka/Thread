@@ -61,16 +61,16 @@ export const SCORE_TICK_ART = {
  */
 export const EDGE_RAIL_ART = {
   color: THREAD,
-  idleWidth: 1.55,
-  idleAlpha: 0.4,
-  idleBlur: 5,
-  bloomWidth: 3.35,
-  bloomAlpha: 0.96,
-  bloomBlur: 14,
-  scoreWidth: 4.1,
-  scoreBlur: 18,
+  idleWidth: 1.45,
+  idleAlpha: 0.34,
+  idleBlur: 4,
+  bloomWidth: 3.8,
+  bloomAlpha: 1,
+  bloomBlur: 18,
+  scoreWidth: 4.2,
+  scoreBlur: 20,
   /** Local bloom along Y — wider than the skim band so it reads as a ride, not a grind. */
-  contactBand: 64,
+  contactBand: 88,
   inset: 1.35,
 } as const;
 

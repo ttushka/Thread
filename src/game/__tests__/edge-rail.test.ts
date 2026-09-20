@@ -4,7 +4,7 @@ import { Game } from "../Game.ts";
 import { markSkimScoreTeachSeen, type StorageLike } from "../persistence.ts";
 import { EDGE_RAIL_ART } from "../render/draw.ts";
 import { skimAward } from "../score.ts";
-import { SCORE_SKIM_TEACH, CONTROL_SKIM_HEAT } from "../variant.ts";
+import { SCORE_SKIM_TEACH } from "../variant.ts";
 import {
   DIST,
   FIELD_W,
@@ -14,7 +14,7 @@ import {
   TICK,
 } from "../world/constants.ts";
 import { classifyGapHit } from "../world/collision.ts";
-import { closerRailSide, railBloomHeat, railBloomOn, railContact, railScoreBloomOn } from "../world/rail.ts";
+import { closerRailSide, railBloomHeat, railBloomOn, railContact, railProximity, railScoreBloomOn, RAIL_VISUAL_BAND } from "../world/rail.ts";
 import { createWorld, updateWorld } from "../world/simulate.ts";
 
 class MemoryStorage implements StorageLike {
@@ -84,6 +84,7 @@ describe("IDENTITY-EDGE-RAIL-v1 — band invitation, not a tightrope", () => {
     expect(NICK_BAND).toBe(8);
     expect(NEAR_MISS_BAND).toBe(12);
     expect(EDGE_RAIL_ART.contactBand).toBeGreaterThan(NEAR_MISS_BAND + NICK_BAND);
+    expect(RAIL_VISUAL_BAND).toBeGreaterThan(NEAR_MISS_BAND + NICK_BAND);
     expect(classifyGapHit(180, 100, 260)).toBe("none");
     expect(classifyGapHit(118, 100, 260)).toBe("nearMiss");
     expect(classifyGapHit(108, 100, 260)).toBe("nick");
@@ -92,6 +93,11 @@ describe("IDENTITY-EDGE-RAIL-v1 — band invitation, not a tightrope", () => {
   it("treats the skim/nick band as a ride, center as off-rail", () => {
     expect(closerRailSide(118, 100, 260)).toBe("left");
     expect(closerRailSide(242, 100, 260)).toBe("right");
+    expect(railProximity(0)).toBe(1);
+    expect(railProximity(NICK_BAND + NEAR_MISS_BAND - 1)).toBe(1);
+    expect(railProximity(NICK_BAND + NEAR_MISS_BAND + 8)).toBeGreaterThan(0);
+    expect(railProximity(NICK_BAND + NEAR_MISS_BAND + 8)).toBeLessThan(1);
+    expect(railProximity(80)).toBe(0);
     const center = worldWith(180);
     expect(railContact(center).riding).toBe(false);
     expect(railBloomOn(center)).toBe(false);
@@ -101,8 +107,9 @@ describe("IDENTITY-EDGE-RAIL-v1 — band invitation, not a tightrope", () => {
     updateWorld(skim, hold(118), TICK);
     expect(railContact(skim).riding).toBe(true);
     expect(railContact(skim).side).toBe("left");
+    expect(railContact(skim).proximity).toBe(1);
     expect(railBloomOn(skim)).toBe(true);
-    expect(railBloomHeat(skim)).toBeGreaterThanOrEqual(CONTROL_SKIM_HEAT);
+    expect(railBloomHeat(skim)).toBe(1);
   });
 });
 

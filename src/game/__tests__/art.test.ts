@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { SCORE_TICK_ART, WALL_ART } from "../render/draw.ts";
+import { EDGE_RAIL_ART, PLAYFIELD_ART, SCORE_TICK_ART, WALL_ART } from "../render/draw.ts";
+import { BEAT_GLOW_BLUR_MAX } from "../variant.ts";
 import {
   GATE_LIP_THICKNESS,
+  NEAR_MISS_BAND,
+  NICK_BAND,
   SCORE_TICK_EDGE_MS,
   SCORE_TICK_FILAMENT_MS,
   SCORE_TICK_HUD_MS,
@@ -44,5 +47,26 @@ describe("ART-SKIM-TICK-JUICE-BUMP-v1 tokens", () => {
     expect(SCORE_TICK_ART.edge).toBe("#B8C0CC");
     expect(SCORE_TICK_ART.edge).toBe(WALL_ART.pinchLipEdge);
     expect(SCORE_TICK_ART.edge).not.toBe(SCORE_TICK_ART.filament);
+  });
+});
+
+describe("IDENTITY-EDGE-RAIL-v1 tokens", () => {
+  it("locks a teal rail on the inner edge, thicker on bloom, within Art caps", () => {
+    expect(EDGE_RAIL_ART.color).toBe("#5EEAD4");
+    expect(EDGE_RAIL_ART.color).toBe(SCORE_TICK_ART.filament);
+    expect(EDGE_RAIL_ART.idleWidth).toBeGreaterThanOrEqual(1.2);
+    expect(EDGE_RAIL_ART.idleWidth).toBeLessThan(EDGE_RAIL_ART.bloomWidth);
+    expect(EDGE_RAIL_ART.bloomWidth).toBeLessThanOrEqual(EDGE_RAIL_ART.scoreWidth);
+    expect(EDGE_RAIL_ART.scoreWidth).toBeLessThanOrEqual(4.4);
+    expect(EDGE_RAIL_ART.idleAlpha).toBeGreaterThan(0.2);
+    expect(EDGE_RAIL_ART.idleAlpha).toBeLessThan(EDGE_RAIL_ART.bloomAlpha);
+    expect(EDGE_RAIL_ART.bloomAlpha).toBeGreaterThanOrEqual(0.85);
+    expect(EDGE_RAIL_ART.bloomBlur).toBeLessThanOrEqual(BEAT_GLOW_BLUR_MAX);
+    expect(EDGE_RAIL_ART.scoreBlur).toBeLessThanOrEqual(BEAT_GLOW_BLUR_MAX);
+    expect(EDGE_RAIL_ART.contactBand).toBeGreaterThanOrEqual(48);
+    expect(EDGE_RAIL_ART.contactBand).toBeGreaterThan(NEAR_MISS_BAND + NICK_BAND);
+    expect(PLAYFIELD_ART.centerDimAlpha).toBeGreaterThan(0);
+    expect(PLAYFIELD_ART.centerDimAlpha).toBeLessThanOrEqual(0.4);
+    expect(PLAYFIELD_ART.panel).not.toBe("#12151A");
   });
 });

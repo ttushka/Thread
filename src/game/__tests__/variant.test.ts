@@ -54,7 +54,7 @@ describe("parseVariant", () => {
   });
 
   it("locks Design teach copy for every live variant", () => {
-    expect(SCORE_SKIM_TEACH).toBe("Score lives on the skim.");
+    expect(SCORE_SKIM_TEACH).toBe("Ride the edge rail \u2014 that\u2019s the score.");
     expect(RESULT_NO_SKIM).toBe("No skims — try the edge.");
     expect(VARIANT_TEACH.control).toBe(CONTROL_TEACH);
     expect(EXPERIMENT_TEACH_COPY.control).toBe(CONTROL_TEACH);

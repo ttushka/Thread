@@ -18,9 +18,9 @@ import {
   VIEW_BEHIND,
 } from "../world/constants.ts";
 import { LANE_GUIDES, BEAT_PULSE_SCALE_MAX, BEAT_GLOW_BLUR_MAX, beatSkimScale } from "../variant.ts";
+import { railBloomHeat, railContact, railScoreBloomOn } from "../world/rail.ts";
 
 const BG_DEEP = "#0B0D10";
-const BG_PANEL = "#12151A";
 const INK = "#E8EAED";
 const THREAD = "#5EEAD4";
 const THREAD_DIM = "#2A6F66";
@@ -29,7 +29,8 @@ const INK_MUTED = "#8B919A";
 
 /**
  * WALL-MOVER-POLISH-BRIEF-v1 — palette / stroke / fill / soft depth only.
- * Teal stays thread-only. Inner shade is ≤8% toward --bg-deep, not a second hue.
+ * Inner shade is ≤8% toward --bg-deep, not a second hue.
+ * Teal is reserved for the live thread and the Edge Rail (IDENTITY-EDGE-RAIL-v1).
  */
 export const WALL_ART = {
   obstacle: "#3D4450",
@@ -48,10 +49,35 @@ export const WALL_ART = {
   contactShadowAlpha: 0.18,
 } as const;
 
-/** Award-tick tokens. Teal stays thread-only; walls/lips use pinch-lip-edge. */
+/** Award-tick tokens. Lip stroke stays pinch-lip-edge; teal lives on thread + rail. */
 export const SCORE_TICK_ART = {
   filament: THREAD,
   edge: WALL_ART.pinchLipEdge,
+} as const;
+
+/**
+ * IDENTITY-EDGE-RAIL-v1 — always-on inner-edge filament.
+ * Teal allowed on the rail and the live thread only. Visual band, not a collider.
+ */
+export const EDGE_RAIL_ART = {
+  color: THREAD,
+  idleWidth: 1.45,
+  idleAlpha: 0.34,
+  idleBlur: 4,
+  bloomWidth: 3.8,
+  bloomAlpha: 1,
+  bloomBlur: 18,
+  scoreWidth: 4.2,
+  scoreBlur: 20,
+  /** Local bloom along Y — wider than the skim band so it reads as a ride, not a grind. */
+  contactBand: 88,
+  inset: 1.35,
+} as const;
+
+/** Mid-corridor fill stays darker/flatter than the glowing rail. */
+export const PLAYFIELD_ART = {
+  panel: "#0E1014",
+  centerDimAlpha: 0.3,
 } as const;
 
 function parseHex(hex: string): [number, number, number] {
@@ -92,7 +118,7 @@ export function drawFrame(
   ctx.fillRect(0, 0, cssW, cssH);
 
   withPlayfield(ctx, map, () => {
-    ctx.fillStyle = BG_PANEL;
+    ctx.fillStyle = PLAYFIELD_ART.panel;
     ctx.fillRect(0, 0, FIELD_W, FIELD_H);
 
     if (!world) {
@@ -106,6 +132,7 @@ export function drawFrame(
     drawTunnel(ctx, world, camera);
     if (world.variant === "lanes") drawLaneGuides(ctx);
     drawSlabs(ctx, world, camera);
+    drawEdgeRail(ctx, world, camera);
     if (world.course.finishY !== null) drawFinish(ctx, world.course.finishY, camera);
     drawThread(ctx, world, camera, x);
     drawParticles(ctx, world);
@@ -154,6 +181,7 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
   const y1s = worldToScreen(y1, camera);
   fillWallSlab(ctx, "left", left, y0s, y1s);
   fillWallSlab(ctx, "right", right, y0s, y1s);
+  drawCenterDead(ctx, left, right);
 
   ctx.strokeStyle = WALL_ART.obstacleEdge;
   ctx.lineWidth = 2;
@@ -164,29 +192,79 @@ function drawTunnel(ctx: CanvasRenderingContext2D, world: World, camera: number)
   ctx.beginPath();
   right.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
   ctx.stroke();
-
-  drawLocalWallHeat(ctx, world, camera, left, right);
 }
 
-/**
- * ART-SKIM-TICK-JUICE-BUMP-v1 — local corridor edge under the awarding skim.
- * `--pinch-lip-edge` only. Never thread/teal on walls.
- */
-function drawLocalWallHeat(
+/** Mid-corridor dim — edges stay readable so the rail is the subject. */
+function drawCenterDead(
   ctx: CanvasRenderingContext2D,
-  world: World,
-  camera: number,
   left: { x: number; sy: number }[],
   right: { x: number; sy: number }[],
 ): void {
-  if (world.reducedMotion || !scoreTickEdgeOn(world) || !world.scoreTickSide) return;
-  const edge = world.scoreTickSide === "left" ? left : right;
-  const lip = world.obstacles.find((o) => o.id === world.scoreTickLipId);
-  const focusSy = worldToScreen(lip?.y ?? camera, camera);
-  const band = 52;
+  if (left.length === 0 || right.length === 0) return;
   ctx.save();
-  ctx.strokeStyle = WALL_ART.pinchLipEdge;
-  ctx.lineWidth = 2.75;
+  ctx.beginPath();
+  left.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
+  for (let i = right.length - 1; i >= 0; i--) {
+    const p = right[i]!;
+    ctx.lineTo(p.x, p.sy);
+  }
+  ctx.closePath();
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, 0, FIELD_W, 0);
+  const a = PLAYFIELD_ART.centerDimAlpha;
+  g.addColorStop(0, "rgba(11,13,16,0)");
+  g.addColorStop(0.28, rgba(BG_DEEP, a));
+  g.addColorStop(0.5, rgba(BG_DEEP, a));
+  g.addColorStop(0.72, rgba(BG_DEEP, a));
+  g.addColorStop(1, "rgba(11,13,16,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, FIELD_W, FIELD_H);
+  ctx.restore();
+}
+
+function insetRailEdge(
+  side: "left" | "right",
+  edge: { x: number; sy: number }[],
+): { x: number; sy: number }[] {
+  const inset = EDGE_RAIL_ART.inset;
+  return edge.map((p) => ({ x: side === "left" ? p.x + inset : p.x - inset, sy: p.sy }));
+}
+
+function strokeRailPolyline(
+  ctx: CanvasRenderingContext2D,
+  edge: { x: number; sy: number }[],
+  width: number,
+  alpha: number,
+  blur: number,
+): void {
+  if (edge.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = rgba(EDGE_RAIL_ART.color, alpha);
+  ctx.shadowColor = rgba(EDGE_RAIL_ART.color, Math.min(1, alpha + 0.15));
+  ctx.shadowBlur = blur;
+  ctx.lineWidth = width;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  edge.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.sy) : ctx.lineTo(p.x, p.sy)));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function strokeRailBand(
+  ctx: CanvasRenderingContext2D,
+  edge: { x: number; sy: number }[],
+  focusSy: number,
+  band: number,
+  width: number,
+  alpha: number,
+  blur: number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = rgba(EDGE_RAIL_ART.color, alpha);
+  ctx.shadowColor = rgba(EDGE_RAIL_ART.color, 0.95);
+  ctx.shadowBlur = blur;
+  ctx.lineWidth = width;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -203,6 +281,113 @@ function drawLocalWallHeat(
       ctx.lineTo(p.x, p.sy);
     }
   }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Always-on teal rail on the inner playable edge. Blooms in the skim/nick
+ * band and louder on a skim score tick. Brake in the center does not light it.
+ */
+function drawEdgeRail(ctx: CanvasRenderingContext2D, world: World, camera: number): void {
+  const y0 = camera - VIEW_BEHIND - 20;
+  const y1 = camera + VIEW_AHEAD + 20;
+  const step = 8;
+  const left: { x: number; sy: number }[] = [];
+  const right: { x: number; sy: number }[] = [];
+  for (let y = y0; y <= y1; y += step) {
+    const w = sampleWalls(world.course.keyframes, y);
+    const sy = worldToScreen(y, camera);
+    left.push({ x: w.left, sy });
+    right.push({ x: w.right, sy });
+  }
+  const railL = insetRailEdge("left", left);
+  const railR = insetRailEdge("right", right);
+
+  strokeRailPolyline(ctx, railL, EDGE_RAIL_ART.idleWidth, EDGE_RAIL_ART.idleAlpha, EDGE_RAIL_ART.idleBlur);
+  strokeRailPolyline(ctx, railR, EDGE_RAIL_ART.idleWidth, EDGE_RAIL_ART.idleAlpha, EDGE_RAIL_ART.idleBlur);
+
+  const heat = railBloomHeat(world);
+  const contact = railContact(world);
+  if (heat > 0 && contact.side) {
+    const edge = contact.side === "left" ? railL : railR;
+    const width = EDGE_RAIL_ART.idleWidth + (EDGE_RAIL_ART.bloomWidth - EDGE_RAIL_ART.idleWidth) * heat;
+    const blur = EDGE_RAIL_ART.idleBlur + (EDGE_RAIL_ART.bloomBlur - EDGE_RAIL_ART.idleBlur) * heat;
+    const alpha = EDGE_RAIL_ART.idleAlpha + (EDGE_RAIL_ART.bloomAlpha - EDGE_RAIL_ART.idleAlpha) * heat;
+    strokeRailBand(ctx, edge, THREAD_SCREEN_Y, EDGE_RAIL_ART.contactBand, width, alpha, blur);
+  }
+
+  if (railScoreBloomOn(world) && world.scoreTickSide) {
+    const edge = world.scoreTickSide === "left" ? railL : railR;
+    const lip = world.obstacles.find((o) => o.id === world.scoreTickLipId);
+    const focusSy = worldToScreen(lip?.y ?? camera, camera);
+    strokeRailBand(
+      ctx,
+      edge,
+      focusSy,
+      EDGE_RAIL_ART.contactBand,
+      EDGE_RAIL_ART.scoreWidth,
+      EDGE_RAIL_ART.bloomAlpha,
+      EDGE_RAIL_ART.scoreBlur,
+    );
+  }
+
+  drawLipRails(ctx, world, camera, heat, contact);
+}
+
+function drawLipRails(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  camera: number,
+  heat: number,
+  contact: { side: "left" | "right" | null; riding: boolean; lipId: number },
+): void {
+  for (const obs of world.obstacles) {
+    const sy = worldToScreen(obs.y, camera);
+    if (sy < -40 || sy > FIELD_H + 40) continue;
+    const gap = obs.kind === "mover" ? moverGap(obs, world.time) : { left: obs.left, right: obs.right };
+    const bars = slabPair(obs.y, obs.thickness, gap);
+    const top = sy - bars.left.h / 2;
+    const scoreLeft = railScoreBloomOn(world) && world.scoreTickLipId === obs.id && world.scoreTickSide === "left";
+    const scoreRight = railScoreBloomOn(world) && world.scoreTickLipId === obs.id && world.scoreTickSide === "right";
+    const rideLeft = contact.lipId === obs.id && contact.side === "left" && heat > 0;
+    const rideRight = contact.lipId === obs.id && contact.side === "right" && heat > 0;
+    strokeLipRail(ctx, gap.left + EDGE_RAIL_ART.inset, top, bars.left.h, scoreLeft, rideLeft, heat);
+    strokeLipRail(ctx, gap.right - EDGE_RAIL_ART.inset, top, bars.right.h, scoreRight, rideRight, heat);
+  }
+}
+
+function strokeLipRail(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  top: number,
+  h: number,
+  score: boolean,
+  riding: boolean,
+  heat: number,
+): void {
+  if (h <= 0) return;
+  const bloom = score || riding;
+  const width = score
+    ? EDGE_RAIL_ART.scoreWidth
+    : riding
+      ? EDGE_RAIL_ART.idleWidth + (EDGE_RAIL_ART.bloomWidth - EDGE_RAIL_ART.idleWidth) * heat
+      : EDGE_RAIL_ART.idleWidth;
+  const blur = score
+    ? EDGE_RAIL_ART.scoreBlur
+    : riding
+      ? EDGE_RAIL_ART.idleBlur + (EDGE_RAIL_ART.bloomBlur - EDGE_RAIL_ART.idleBlur) * heat
+      : EDGE_RAIL_ART.idleBlur;
+  const alpha = bloom ? EDGE_RAIL_ART.bloomAlpha : EDGE_RAIL_ART.idleAlpha;
+  ctx.save();
+  ctx.strokeStyle = rgba(EDGE_RAIL_ART.color, alpha);
+  ctx.shadowColor = rgba(EDGE_RAIL_ART.color, bloom ? 0.95 : Math.min(1, alpha + 0.15));
+  ctx.shadowBlur = blur;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, top + h);
   ctx.stroke();
   ctx.restore();
 }
@@ -276,7 +461,7 @@ function drawSlabs(ctx: CanvasRenderingContext2D, world: World, camera: number):
   }
 }
 
-/** Local awarding lip/wall edge → pinch-lip-edge. Never thread/teal. */
+/** Local awarding lip stroke → pinch-lip-edge. Teal bloom lives on the rail. */
 export function withScoreTickEdge(
   world: World,
   obsId: number,

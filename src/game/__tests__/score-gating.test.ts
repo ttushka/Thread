@@ -216,7 +216,7 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — score gating", () => {
 
 describe("BIG-FEEL-REDESIGN-v1 PR1 — HUD honesty", () => {
   it("locks the first-run line, fade, and zero-skim result copy", () => {
-    expect(SCORE_SKIM_TEACH).toBe("Score lives on the skim.");
+    expect(SCORE_SKIM_TEACH).toBe("Ride the edge rail \u2014 that\u2019s the score.");
     expect(RESULT_NO_SKIM).toBe("No skims — try the edge.");
     expect(SKIM_SCORE_TEACH_KEY).toBe("thread.v1.skimScoreTeachSeen");
     expect(SCORE_SKIM_TEACH_S).toBeCloseTo(4, 8);
@@ -227,7 +227,7 @@ describe("BIG-FEEL-REDESIGN-v1 PR1 — HUD honesty", () => {
     expect(CLEAN_AWARD).toBe(50);
   });
 
-  it("shows Score lives on the skim. once, then sets the flag", () => {
+  it("shows Ride the edge rail — that\u2019s the score. once, then sets the flag", () => {
     const storage = new MemoryStorage();
     const game = new Game(storage, { endlessSeed: 1 });
     game.startEndless();

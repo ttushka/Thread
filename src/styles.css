@@ -6,6 +6,8 @@
   --ink-muted: #8b919a;
   --thread: #5eead4;
   --thread-dim: #2a6f66;
+  /* IDENTITY-EDGE-RAIL-v1 — teal on rail + live thread only */
+  --edge-rail: #5eead4;
   /* WALL-MOVER-POLISH-BRIEF-v1 — canvas copies these hexes in draw.ts */
   --obstacle: #3d4450;
   --obstacle-edge: #5a6270;

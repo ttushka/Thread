@@ -332,7 +332,7 @@ describe("BIG-FEEL PR2 — Room A/B/C first minute", () => {
 
   it("does not reopen PR1 score/HUD or keyboard fine-steer", () => {
     expect(THROUGH_AWARD).toBe(0);
-    expect(SCORE_SKIM_TEACH).toBe("Score lives on the skim.");
+    expect(SCORE_SKIM_TEACH).toBe("Ride the edge rail \u2014 that\u2019s the score.");
     expect(RESULT_NO_SKIM).toBe("No skims — try the edge.");
     expect(STEER_SPEED).toBe(280);
     expect(STEER_KEY_ACCEL).toBe(3.2);

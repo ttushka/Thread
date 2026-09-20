@@ -32,7 +32,7 @@ export const THROUGH_FLASH_MS = 160;
  * Filament `--thread` rim at full opacity. Window 140–180ms.
  */
 export const SCORE_TICK_FILAMENT_MS = 160;
-/** Local lip/wall edge → `--pinch-lip-edge` `#B8C0CC`. Window 100–140ms. No teal on walls. */
+/** Local lip/wall edge window 100–140ms. Rail bloom (teal) attaches here; lip stroke stays pinch-lip-edge. */
 export const SCORE_TICK_EDGE_MS = 120;
 /** HUD score punch: ink→thread + slight scale. Arm's-length readable. */
 export const SCORE_TICK_HUD_MS = 120;

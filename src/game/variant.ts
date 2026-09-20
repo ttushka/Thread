@@ -39,8 +39,8 @@ export const BRAKE_SKIM_HEAT = 0.72;
 /** Control near-miss juice. Amped so a skim score tick is unmissable; still below Brake-held. */
 export const CONTROL_SKIM_HEAT = 0.55;
 
-/** BIG-FEEL-REDESIGN-v1 PR1 — first-run HUD line. Once per browser. */
-export const SCORE_SKIM_TEACH = "Score lives on the skim.";
+/** IDENTITY-EDGE-RAIL-v1 — first-run HUD line. Once per browser. */
+export const SCORE_SKIM_TEACH = "Ride the edge rail \u2014 that\u2019s the score.";
 export const SCORE_SKIM_TEACH_S = 4;
 export const SCORE_SKIM_TEACH_FADE_S = 0.5;
 export const RESULT_NO_SKIM = "No skims — try the edge.";

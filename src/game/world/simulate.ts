@@ -557,7 +557,7 @@ export function scoreTickFilamentOn(world: World): boolean {
   return scoreTickWindowOn(world.scoreTickTimer, SCORE_TICK_FILAMENT_MS);
 }
 
-/** Local lip/wall edge heat. 100–140ms. Draw uses pinch-lip-edge only. */
+/** Local lip/wall edge heat. 100–140ms. Rail bloom attaches to this window. */
 export function scoreTickEdgeOn(world: World): boolean {
   return scoreTickWindowOn(world.scoreTickTimer, SCORE_TICK_EDGE_MS);
 }

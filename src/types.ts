@@ -78,6 +78,8 @@ export type CourseSpec = {
   finishY: number | null;
   keyframes: WallKeyframe[];
   obstacles: ObstacleSpec[];
+  /** Layout variant. Omitted / control / brake share analog Control geometry. */
+  variant?: "control" | "brake" | "beat" | "lanes";
 };
 
 export type Particle = {
